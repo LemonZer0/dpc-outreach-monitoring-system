@@ -20,19 +20,29 @@ a dashboard and automatically synchronized Google Sheet.
 
 ## Architecture
 
+```text
 Android App
-    ↓
-Normal Android Phone Application
-    ↓
+    |
+    v
+Normal Android Phone Dialer
+    |
+    v
 Android Call Log
-    ↓
+    |
+    v
 Spring Boot Backend
-    ↓
-PostgreSQL
-    ↓
+    |
+    v
+PostgreSQL Database
+    |
+    v
 CORE Dashboard
-    ↓
-Google Sheets
+    |
+    v
+Google Sheets Integration
+```
+
+*Note: This represents the planned system architecture.*
 
 ## Main Components
 

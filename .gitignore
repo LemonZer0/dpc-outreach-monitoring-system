@@ -27,3 +27,6 @@ desktop.ini
 *.jks
 *.keystore
 secrets/
+
+# Local Codex handoff notes
+/backend/docs/

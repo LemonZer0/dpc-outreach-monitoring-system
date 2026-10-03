@@ -22,12 +22,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,6 +53,9 @@ class CallVerificationPostgresIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private CompanyRepository companyRepository;
@@ -174,9 +177,9 @@ class CallVerificationPostgresIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        Matcher idMatcher = Pattern.compile("\"id\"\\s*:\\s*(\\d+)").matcher(submissionResponse);
-        assertTrue(idMatcher.find(), "POST response should include the saved call record ID");
-        long savedRecordId = Long.parseLong(idMatcher.group(1));
+        JsonNode submissionJson = objectMapper.readTree(submissionResponse);
+        assertTrue(submissionJson.has("id"), "POST response should include the saved call record ID");
+        long savedRecordId = submissionJson.get("id").asLong();
 
         mockMvc.perform(get("/api/call-records/" + savedRecordId))
                 .andExpect(status().isOk())

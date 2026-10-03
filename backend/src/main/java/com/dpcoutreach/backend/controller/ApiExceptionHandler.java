@@ -2,6 +2,7 @@ package com.dpcoutreach.backend.controller;
 
 import com.dpcoutreach.backend.dto.ApiErrorResponse;
 import com.dpcoutreach.backend.service.AmbiguousContactMatchException;
+import com.dpcoutreach.backend.service.CallRecordNotFoundException;
 import com.dpcoutreach.backend.service.DpcNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(DpcNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleDpcNotFound(DpcNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(CallRecordNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleCallRecordNotFound(CallRecordNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
     }
 

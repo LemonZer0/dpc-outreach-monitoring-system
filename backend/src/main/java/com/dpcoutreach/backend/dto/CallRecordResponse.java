@@ -5,7 +5,7 @@ import com.dpcoutreach.backend.entity.VerificationStatus;
 
 import java.time.Instant;
 
-public record CallSubmissionResponse(
+public record CallRecordResponse(
         Long id,
         Long dpcId,
         Long contactId,
@@ -14,8 +14,8 @@ public record CallSubmissionResponse(
         Integer durationSeconds,
         VerificationStatus verificationStatus) {
 
-    public static CallSubmissionResponse from(CallRecord callRecord) {
-        return new CallSubmissionResponse(
+    public static CallRecordResponse from(CallRecord callRecord) {
+        return new CallRecordResponse(
                 callRecord.getId(),
                 callRecord.getDpc().getId(),
                 callRecord.getContact() == null ? null : callRecord.getContact().getId(),

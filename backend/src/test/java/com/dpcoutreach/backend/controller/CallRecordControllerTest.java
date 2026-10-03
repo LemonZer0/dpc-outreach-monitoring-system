@@ -1,12 +1,15 @@
 package com.dpcoutreach.backend.controller;
 
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
+import com.dpcoutreach.backend.dto.CallRecordResponse;
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.service.AmbiguousContactMatchException;
+import com.dpcoutreach.backend.service.CallRecordNotFoundException;
+import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
 import com.dpcoutreach.backend.service.DpcNotFoundException;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,13 +35,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CallRecordControllerTest {
 
     private final CallVerificationService callVerificationService = mock(CallVerificationService.class);
+    private final CallRecordQueryService callRecordQueryService = mock(CallRecordQueryService.class);
     private final LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders.standaloneSetup(new CallRecordController(callVerificationService))
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new CallRecordController(callVerificationService, callRecordQueryService))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -103,6 +109,27 @@ class CallRecordControllerTest {
                         .content(validRequest()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void retrievesSavedCallRecord() throws Exception {
+        when(callRecordQueryService.findById(42L)).thenReturn(CallRecordResponse.from(callRecord()));
+
+        mockMvc.perform(get("/api/call-records/42"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phoneNumber").value("919876543210"))
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
+
+        verify(callRecordQueryService).findById(42L);
+    }
+
+    @Test
+    void returnsNotFoundWhenCallRecordDoesNotExist() throws Exception {
+        when(callRecordQueryService.findById(404L)).thenThrow(new CallRecordNotFoundException(404L));
+
+        mockMvc.perform(get("/api/call-records/404"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Call record with id 404 was not found"));
     }
 
     private static String validRequest() {

@@ -19,10 +19,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,13 +38,21 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "DB_PASSWORD", matches = ".+")
 class CallVerificationPostgresIntegrationTest {
 
     @Autowired
     private CallVerificationService callVerificationService;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @Autowired
     private CompanyRepository companyRepository;
@@ -138,6 +151,38 @@ class CallVerificationPostgresIntegrationTest {
             executor.shutdownNow();
             executor.awaitTermination(5, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    void submittedCallCanBeRetrievedThroughTheApi() throws Exception {
+        String requestBody = """
+                {
+                  "dpcId": %d,
+                  "phoneNumber": "%s",
+                  "callTimestamp": "%s",
+                  "durationSeconds": 35
+                }
+                """.formatted(dpc.getId(), request.phoneNumber(), request.callTimestamp());
+
+        String submissionResponse = mockMvc.perform(post("/api/call-records")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Matcher idMatcher = Pattern.compile("\"id\"\\s*:\\s*(\\d+)").matcher(submissionResponse);
+        assertTrue(idMatcher.find(), "POST response should include the saved call record ID");
+        long savedRecordId = Long.parseLong(idMatcher.group(1));
+
+        mockMvc.perform(get("/api/call-records/" + savedRecordId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(savedRecordId))
+                .andExpect(jsonPath("$.phoneNumber").value(request.phoneNumber().replaceAll("\\D", "")))
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
     }
 
     private CallRecord submitWhenReleased(CountDownLatch ready, CountDownLatch start) throws Exception {

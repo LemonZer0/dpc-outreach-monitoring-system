@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ContactRepository extends JpaRepository<Contact, Long> {
 
@@ -13,4 +14,6 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
             + "WHERE regexp_replace(c.phone_number, '[^0-9]', '', 'g') = :normalizedPhoneNumber",
             nativeQuery = true)
     List<Contact> findAllByNormalizedPhoneNumber(@Param("normalizedPhoneNumber") String normalizedPhoneNumber);
+
+    Optional<Contact> findFirstByPhoneNumberAndCompanyId(String phoneNumber, Long companyId);
 }

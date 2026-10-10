@@ -14,4 +14,6 @@ public interface DpcRepository extends JpaRepository<Dpc, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select dpc from Dpc dpc where dpc.id = :dpcId")
     Optional<Dpc> findByIdForUpdate(@Param("dpcId") Long dpcId);
+
+    Optional<Dpc> findFirstByName(String name);
 }

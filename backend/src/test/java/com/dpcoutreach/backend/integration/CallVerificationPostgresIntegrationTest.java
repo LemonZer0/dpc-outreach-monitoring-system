@@ -186,6 +186,11 @@ class CallVerificationPostgresIntegrationTest {
                 .andExpect(jsonPath("$.id").value(savedRecordId))
                 .andExpect(jsonPath("$.phoneNumber").value(request.phoneNumber().replaceAll("\\D", "")))
                 .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
+
+        mockMvc.perform(get("/api/call-records").param("dpcId", dpc.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(savedRecordId))
+                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
     }
 
     private CallRecord submitWhenReleased(CountDownLatch ready, CountDownLatch start) throws Exception {

@@ -5,6 +5,8 @@ import com.dpcoutreach.backend.repository.CallRecordRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class CallRecordQueryService {
 
@@ -19,5 +21,12 @@ public class CallRecordQueryService {
         return callRecordRepository.findById(id)
                 .map(CallRecordResponse::from)
                 .orElseThrow(() -> new CallRecordNotFoundException(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CallRecordResponse> findAllByDpcId(Long dpcId) {
+        return callRecordRepository.findAllByDpcIdOrderByCallTimestampDesc(dpcId).stream()
+                .map(CallRecordResponse::from)
+                .toList();
     }
 }

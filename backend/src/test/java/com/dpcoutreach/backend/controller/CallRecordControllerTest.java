@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -121,6 +122,28 @@ class CallRecordControllerTest {
                 .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
 
         verify(callRecordQueryService).findById(42L);
+    }
+
+    @Test
+    void retrievesCallRecordsForDpc() throws Exception {
+        when(callRecordQueryService.findAllByDpcId(7L))
+                .thenReturn(List.of(CallRecordResponse.from(callRecord())));
+
+        mockMvc.perform(get("/api/call-records").param("dpcId", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].phoneNumber").value("919876543210"))
+                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
+
+        verify(callRecordQueryService).findAllByDpcId(7L);
+    }
+
+    @Test
+    void returnsEmptyListWhenDpcHasNoCallRecords() throws Exception {
+        when(callRecordQueryService.findAllByDpcId(7L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/call-records").param("dpcId", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test

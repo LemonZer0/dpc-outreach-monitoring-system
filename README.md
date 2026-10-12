@@ -44,6 +44,50 @@ Google Sheets Integration
 
 *Note: This represents the planned system architecture.*
 
+## Backend demo data
+
+The backend can seed one local demo DPC, company, and contact when the
+`demo` Spring profile is enabled. Set `DEMO_CONTACT_PHONE` to the phone
+number whose calls should match the demo contact. The seeder normalizes
+the number and reuses existing demo records on later starts.
+
+From PowerShell, start the backend with the launcher:
+
+```powershell
+cd backend
+.\scripts\start-backend.ps1
+```
+
+If `DB_PASSWORD` is not already set in the current PowerShell session, the
+launcher asks for it using a masked prompt. Spring Boot then connects to the
+configured PostgreSQL database; a successful application startup confirms
+the connection. The password is only set for the launcher process and is not
+saved to a file.
+
+To start manually and enable demo data instead, run:
+
+```powershell
+cd backend
+$env:DB_PASSWORD = "your-local-database-password"
+$env:DEMO_CONTACT_PHONE = "+91 98765 43210"
+$env:SPRING_PROFILES_ACTIVE = "demo"
+.\mvnw.cmd spring-boot:run
+```
+
+The startup log prints the demo DPC, company, and contact IDs. Demo
+records are not seeded unless the `demo` profile is enabled.
+
+To use the interactive API client while the backend is running, open a
+second PowerShell window in `backend/` and run:
+
+```powershell
+.\scripts\call-record-client.ps1
+```
+
+The menu lets you check backend health, submit call log data, retrieve a
+record by ID, and list records by DPC ID. The backend URL defaults to
+`http://localhost:8080`; set `DPC_API_BASE_URL` to use another host.
+
 ## Main Components
 
 - Android Call Client

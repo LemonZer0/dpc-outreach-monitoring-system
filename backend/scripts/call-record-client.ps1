@@ -6,6 +6,19 @@ if ([string]::IsNullOrWhiteSpace($apiBaseUrl)) {
 }
 $apiBaseUrl = $apiBaseUrl.TrimEnd("/")
 
+try {
+    $health = Invoke-RestMethod -Uri "$apiBaseUrl/api/health" -Method Get
+    if ($health.demoMode -eq $true) {
+        Write-Host "Backend mode: DEMO" -ForegroundColor Yellow
+    } elseif ($health.demoMode -eq $false) {
+        Write-Host "Backend mode: NORMAL (demo mode is off)" -ForegroundColor Green
+    } else {
+        Write-Host "Backend mode: UNKNOWN (health API did not report demo mode)" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "Backend mode: UNKNOWN (could not reach the backend health API)" -ForegroundColor Yellow
+}
+
 function Read-PositiveId([string] $prompt) {
     do {
         $value = (Read-Host $prompt).Trim()

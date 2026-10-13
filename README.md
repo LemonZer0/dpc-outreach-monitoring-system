@@ -58,11 +58,12 @@ cd backend
 .\scripts\start-backend.ps1
 ```
 
-If `DB_PASSWORD` is not already set in the current PowerShell session, the
-launcher asks for it using a masked prompt. Spring Boot then connects to the
-configured PostgreSQL database; a successful application startup confirms
-the connection. The password is only set for the launcher process and is not
-saved to a file.
+The launcher asks whether to show Maven logs, whether to enable demo mode,
+and (if enabled) which phone number to use for the demo contact. If
+`DB_PASSWORD` is not already set in the current PowerShell session, it then
+asks for it using a masked prompt. These launch settings are restored after
+the backend stops; the password is not saved to a file. A successful
+application startup confirms the PostgreSQL connection.
 
 To start manually and enable demo data instead, run:
 

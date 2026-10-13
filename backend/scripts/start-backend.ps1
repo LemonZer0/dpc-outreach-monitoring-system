@@ -3,6 +3,10 @@ $ErrorActionPreference = "Stop"
 $backendDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $hadPreviousPassword = Test-Path Env:DB_PASSWORD
 $previousPassword = $env:DB_PASSWORD
+$hadPreviousProfiles = Test-Path Env:SPRING_PROFILES_ACTIVE
+$previousProfiles = $env:SPRING_PROFILES_ACTIVE
+$hadPreviousDemoPhone = Test-Path Env:DEMO_CONTACT_PHONE
+$previousDemoPhone = $env:DEMO_CONTACT_PHONE
 $passwordBuffer = [IntPtr]::Zero
 $showMavenLogs = $true
 
@@ -19,6 +23,43 @@ do {
         $validLogChoice = $false
     }
 } while (-not $validLogChoice)
+
+do {
+    $demoChoice = (Read-Host "Enable demo mode for this run? (Y/N, default N)").Trim()
+    if ([string]::IsNullOrWhiteSpace($demoChoice) -or $demoChoice -match '(?i)^n(o)?$') {
+        $enableDemoMode = $false
+        $validDemoChoice = $true
+    } elseif ($demoChoice -match '(?i)^y(es)?$') {
+        $enableDemoMode = $true
+        $validDemoChoice = $true
+    } else {
+        Write-Host "Enter Y to enable demo mode or N to disable it." -ForegroundColor Yellow
+        $validDemoChoice = $false
+    }
+} while (-not $validDemoChoice)
+
+if ($enableDemoMode) {
+    do {
+        $demoContactPhone = (Read-Host "Phone number for the demo contact").Trim()
+        if ([string]::IsNullOrWhiteSpace($demoContactPhone)) {
+            Write-Host "A phone number is required when demo mode is enabled." -ForegroundColor Yellow
+        }
+    } while ([string]::IsNullOrWhiteSpace($demoContactPhone))
+
+    $activeProfiles = @($previousProfiles -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($activeProfiles -notcontains "demo") {
+        $activeProfiles += "demo"
+    }
+    $env:SPRING_PROFILES_ACTIVE = $activeProfiles -join ","
+    $env:DEMO_CONTACT_PHONE = $demoContactPhone
+} else {
+    $activeProfiles = @($previousProfiles -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne "demo" })
+    if ($activeProfiles.Count -gt 0) {
+        $env:SPRING_PROFILES_ACTIVE = $activeProfiles -join ","
+    } else {
+        Remove-Item Env:SPRING_PROFILES_ACTIVE -ErrorAction SilentlyContinue
+    }
+}
 
 try {
     if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
@@ -37,6 +78,7 @@ try {
 
     Write-Host "Starting the backend from $backendDirectory"
     Write-Host "Spring Boot will connect to PostgreSQL at localhost:5432/dpc_outreach."
+    Write-Host "Demo mode: $(if ($enableDemoMode) { 'enabled' } else { 'disabled' })"
     Write-Host "Successful application startup confirms the database connection; startup errors will be shown below."
     Write-Host "Press Ctrl+C to stop the backend.`n"
 
@@ -89,5 +131,17 @@ try {
         $env:DB_PASSWORD = $previousPassword
     } else {
         Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    }
+
+    if ($hadPreviousProfiles) {
+        $env:SPRING_PROFILES_ACTIVE = $previousProfiles
+    } else {
+        Remove-Item Env:SPRING_PROFILES_ACTIVE -ErrorAction SilentlyContinue
+    }
+
+    if ($hadPreviousDemoPhone) {
+        $env:DEMO_CONTACT_PHONE = $previousDemoPhone
+    } else {
+        Remove-Item Env:DEMO_CONTACT_PHONE -ErrorAction SilentlyContinue
     }
 }

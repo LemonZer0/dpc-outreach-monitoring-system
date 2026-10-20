@@ -51,6 +51,29 @@ class CallVerificationServiceTest {
     }
 
     @Test
+    void savesLongCallAndUpdatesCompanyStatus() {
+        Contact contact = contact();
+        TestHarness harness = new TestHarness(List.of(contact), false);
+
+        CallRecord saved = harness.service.verifyAndSave(request(61));
+
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL, saved.getVerificationStatus());
+        org.mockito.ArgumentCaptor<OutreachStatus> statusCaptor =
+                org.mockito.ArgumentCaptor.forClass(OutreachStatus.class);
+        verify(harness.outreachStatusRepository).save(statusCaptor.capture());
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL.name(), statusCaptor.getValue().getStatus());
+    }
+
+    @Test
+    void treatsSixtySecondCallAsConnectedRatherThanLongCall() {
+        TestHarness harness = new TestHarness(List.of(contact()), false);
+
+        CallRecord saved = harness.service.verifyAndSave(request(60));
+
+        assertEquals(VerificationStatus.MATCHED_CONNECTED, saved.getVerificationStatus());
+    }
+
+    @Test
     void savesKnownContactWithZeroDurationAsNotConnected() {
         TestHarness harness = new TestHarness(List.of(contact()), false);
 

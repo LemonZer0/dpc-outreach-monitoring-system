@@ -89,6 +89,9 @@ public class CallVerificationService {
         if (contact == null) {
             return VerificationStatus.UNMATCHED_NUMBER;
         }
+        if (durationSeconds > 60) {
+            return VerificationStatus.MATCHED_LONG_CALL;
+        }
         return durationSeconds > 0
                 ? VerificationStatus.MATCHED_CONNECTED
                 : VerificationStatus.MATCHED_NOT_CONNECTED;

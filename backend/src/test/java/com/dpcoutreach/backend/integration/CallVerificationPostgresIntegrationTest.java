@@ -193,6 +193,27 @@ class CallVerificationPostgresIntegrationTest {
                 .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
     }
 
+    @Test
+    void submitsLongCallThroughTheApi() throws Exception {
+        String requestBody = """
+                {
+                  "dpcId": %d,
+                  "phoneNumber": "%s",
+                  "callTimestamp": "%s",
+                  "durationSeconds": 61
+                }
+                """.formatted(dpc.getId(), request.phoneNumber(), request.callTimestamp());
+
+        mockMvc.perform(post("/api/call-records")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_LONG_CALL"));
+
+        OutreachStatus status = outreachStatusRepository.findByCompanyId(company.getId()).orElseThrow();
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL.name(), status.getStatus());
+    }
+
     private CallRecord submitWhenReleased(CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
         if (!start.await(5, TimeUnit.SECONDS)) {

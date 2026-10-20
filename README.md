@@ -115,6 +115,10 @@ record by ID, and list records by DPC ID. The backend URL defaults to
 The system verifies recorded outreach activity using call metadata such
 as phone number, timestamp, duration, and call direction.
 
+Calls matched to a known contact with a duration greater than 60 seconds
+are labeled `MATCHED_LONG_CALL`. This is a duration-based heuristic only;
+it does not verify that a discussion took place.
+
 The system does NOT:
 
 - record calls

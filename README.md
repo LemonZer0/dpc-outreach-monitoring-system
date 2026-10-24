@@ -162,6 +162,31 @@ The system does NOT:
 
 ## Technology
 
+## Android emulator demo
+
+Build the debug APK from PowerShell:
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+The APK is written to
+`android/app/build/outputs/apk/debug/app-debug.apk`. Run the backend with
+demo mode enabled and use the DPC ID printed by its startup log. In the
+Android app, set the backend URL to `http://10.0.2.2:8080` when the app
+runs in an Android emulator or BlueStacks on the same computer. Load the
+optional contact directory, enter a phone number, and submit call metadata.
+For a real call, tap **Open dialer**, place the call, then return to the
+app and check the call log. The app does not place calls without user
+interaction.
+
+BlueStacks may not include a dialer or expose call-log data. In that case,
+use manual timestamp and duration entry to test submission, and use a
+physical Android device to test the dialer and call-log flow. Manual
+metadata submission has been tested with BlueStacks; physical-device
+dialer and call-log behavior still needs testing.
+
 ### Backend
 - Java
 - Spring Boot

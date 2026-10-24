@@ -9,6 +9,11 @@ application-secret.properties
 **/target/
 *.class
 
+# Android / Gradle build output
+**/.gradle/
+**/build/
+android/local.properties
+
 # IDE and editor files
 .idea/
 *.iml

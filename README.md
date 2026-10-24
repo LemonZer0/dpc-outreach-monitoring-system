@@ -99,6 +99,25 @@ includes the contact ID, name, phone number, and company ID and name.
 This list is optional convenience data; call submissions are still
 matched by phone number and are not restricted to listed contacts.
 
+The read-only `GET /api/dpcs` endpoint lists DPC IDs and names for
+dashboard selection; it does not expose account information.
+
+## Read-only dashboard
+
+Start the backend, then open a second PowerShell window at the repository
+root and serve the dashboard locally:
+
+```powershell
+py -m http.server 8000 --bind 127.0.0.1 --directory dashboard
+```
+
+Open `http://127.0.0.1:8000`, choose **Load DPC list**, then select a DPC
+by name. Its ID is shown next to the name and below the selector; choose
+**Load dashboard** to view that DPC's call records and each company's
+latest outreach status. The DPC directory returns only IDs and names.
+The dashboard is read-only and sends GET requests only. The backend
+allows browser requests from this local dashboard origin.
+
 ## Admin contact and company management
 
 Start the backend with `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured,
@@ -200,7 +219,7 @@ dialer and call-log behavior still needs testing.
 - Kotlin
 
 ### Dashboard
-- React
+- HTML, CSS, JavaScript
 
 ### Integration
 - Google Sheets API

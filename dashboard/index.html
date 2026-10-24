@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f6fb">
+    <title>DPC Outreach Dashboard</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">PLACEMENT &amp; INTERNSHIP CORE</p>
+          <h1>Outreach overview</h1>
+          <p class="subtitle">A read-only view of submitted calls and company follow-ups.</p>
+        </div>
+        <div class="connection" id="connection-state" role="status" aria-live="polite">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">Not connected</span>
+        </div>
+      </header>
+
+      <section class="panel connection-panel" aria-labelledby="connection-heading">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">DATA SOURCE</p>
+            <h2 id="connection-heading">Connect to the backend</h2>
+          </div>
+          <button class="button button-primary" id="refresh-button" type="button" disabled>Load dashboard</button>
+        </div>
+        <div class="connection-fields">
+          <label>
+            Backend URL
+            <input id="backend-url" type="url" inputmode="url" value="http://localhost:8080"
+              placeholder="http://localhost:8080" autocomplete="url">
+          </label>
+          <button class="button button-secondary" id="load-dpcs-button" type="button">Load DPC list</button>
+          <label class="dpc-picker">
+            Select DPC (name — ID)
+            <select id="dpc-select" disabled>
+              <option value="">Load the DPC list first</option>
+            </select>
+          </label>
+        </div>
+        <p class="helper-text" id="dpc-selection">Choose a DPC to see its ID and load its call records.</p>
+        <p class="error-message" id="error-message" role="alert" hidden></p>
+      </section>
+
+      <section class="metrics-grid" aria-label="Outreach summary">
+        <article class="metric-card">
+          <span class="metric-label">Call records</span>
+          <strong id="metric-total">—</strong>
+          <span class="metric-note">for this DPC</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Matched contacts</span>
+          <strong id="metric-matched">—</strong>
+          <span class="metric-note">known phone numbers</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Long calls</span>
+          <strong id="metric-long">—</strong>
+          <span class="metric-note">over 60 seconds</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Companies with status</span>
+          <strong id="metric-companies">—</strong>
+          <span class="metric-note">latest outreach recorded</span>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="calls-heading">
+        <div class="panel-heading section-heading">
+          <div>
+            <p class="eyebrow">ACTIVITY</p>
+            <h2 id="calls-heading">Recent call records</h2>
+          </div>
+          <div class="filters">
+            <label class="visually-hidden" for="status-filter">Filter by verification status</label>
+            <select id="status-filter" disabled>
+              <option value="">All statuses</option>
+            </select>
+            <label class="visually-hidden" for="search-filter">Search call records</label>
+            <input id="search-filter" type="search" placeholder="Search number or company" disabled>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Call time</th>
+                <th scope="col">Contact / company</th>
+                <th scope="col">Phone</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Verification</th>
+                <th scope="col">Record</th>
+              </tr>
+            </thead>
+            <tbody id="calls-body">
+              <tr><td class="empty-state" colspan="6">Load the dashboard to see call activity.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-footnote">Showing the latest 100 records returned by the backend.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="companies-heading">
+        <div class="panel-heading section-heading">
+          <div>
+            <p class="eyebrow">FOLLOW-UP</p>
+            <h2 id="companies-heading">Company outreach status</h2>
+          </div>
+          <span class="scope-note">Latest status across all DPCs</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Company</th>
+                <th scope="col">Latest call</th>
+                <th scope="col">Verification status</th>
+                <th scope="col">Updated</th>
+              </tr>
+            </thead>
+            <tbody id="companies-body">
+              <tr><td class="empty-state" colspan="4">Load the dashboard to see company follow-up status.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <footer>Call duration is a verification signal only; it does not confirm what was discussed.</footer>
+    </main>
+  </body>
+</html>

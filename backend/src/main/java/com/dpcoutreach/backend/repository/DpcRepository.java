@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface DpcRepository extends JpaRepository<Dpc, Long> {
@@ -16,4 +17,6 @@ public interface DpcRepository extends JpaRepository<Dpc, Long> {
     Optional<Dpc> findByIdForUpdate(@Param("dpcId") Long dpcId);
 
     Optional<Dpc> findFirstByName(String name);
+
+    List<Dpc> findAllByOrderByNameAsc();
 }

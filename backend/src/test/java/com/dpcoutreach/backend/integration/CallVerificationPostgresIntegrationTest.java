@@ -26,8 +26,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,12 +40,17 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "ADMIN_USERNAME=integration-admin",
+        "ADMIN_PASSWORD=integration-password"
+})
 @AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "DB_PASSWORD", matches = ".+")
 class CallVerificationPostgresIntegrationTest {
@@ -194,6 +201,115 @@ class CallVerificationPostgresIntegrationTest {
     }
 
     @Test
+    void listsKnownContactsWithCompanyDetailsThroughTheApi() throws Exception {
+        JsonNode contacts = objectMapper.readTree(
+                mockMvc.perform(get("/api/contacts"))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString());
+
+        boolean foundFixtureContact = false;
+        for (JsonNode listedContact : contacts) {
+            if (listedContact.get("id").asLong() == contact.getId()) {
+                assertEquals(contact.getName(), listedContact.get("name").asText());
+                assertEquals(contact.getPhoneNumber(), listedContact.get("phoneNumber").asText());
+                assertEquals(company.getId(), listedContact.get("companyId").asLong());
+                assertEquals(company.getName(), listedContact.get("companyName").asText());
+                foundFixtureContact = true;
+                break;
+            }
+        }
+        assertTrue(foundFixtureContact, "The contact list should include the test contact");
+    }
+
+    @Test
+    void adminRoutesRequireCredentialsWhileContactDirectoryRemainsPublic() throws Exception {
+        mockMvc.perform(get("/api/admin/companies"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/contacts"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/admin/companies").header("Authorization", "Basic invalid"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminCanCreateUpdateAndDeleteContactsAndCompanies() throws Exception {
+        String companyResponse = mockMvc.perform(post("/api/admin/companies")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Admin API test company"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Admin API test company"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long companyId = objectMapper.readTree(companyResponse).get("id").asLong();
+
+        String contactResponse = mockMvc.perform(post("/api/admin/contacts")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Admin API test contact","phoneNumber":"+91 (98765) 01234","companyId":%d}
+                                """.formatted(companyId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Admin API test contact"))
+                .andExpect(jsonPath("$.phoneNumber").value("919876501234"))
+                .andExpect(jsonPath("$.companyId").value(companyId))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long contactId = objectMapper.readTree(contactResponse).get("id").asLong();
+
+        mockMvc.perform(delete("/api/admin/companies/" + companyId)
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(put("/api/admin/companies/" + companyId)
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Renamed admin test company"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Renamed admin test company"));
+
+        mockMvc.perform(put("/api/admin/contacts/" + contactId)
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Renamed admin test contact","phoneNumber":"+91 90000 11111","companyId":%d}
+                                """.formatted(companyId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Renamed admin test contact"))
+                .andExpect(jsonPath("$.phoneNumber").value("919000011111"))
+                .andExpect(jsonPath("$.companyName").value("Renamed admin test company"));
+
+        mockMvc.perform(delete("/api/admin/contacts/" + contactId)
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(delete("/api/admin/companies/" + companyId)
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void adminCannotDeleteContactWithCallHistory() throws Exception {
+        callVerificationService.verifyAndSave(request);
+
+        mockMvc.perform(delete("/api/admin/contacts/" + contact.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "Contact with id " + contact.getId() + " cannot be deleted because it has call history"));
+    }
+
+    @Test
     void submitsLongCallThroughTheApi() throws Exception {
         String requestBody = """
                 {
@@ -220,5 +336,10 @@ class CallVerificationPostgresIntegrationTest {
             throw new IllegalStateException("Timed out waiting to start concurrent submission");
         }
         return callVerificationService.verifyAndSave(request);
+    }
+
+    private static String adminAuthorizationHeader() {
+        String credentials = "integration-admin:integration-password";
+        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 }

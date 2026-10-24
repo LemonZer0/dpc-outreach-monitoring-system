@@ -15,4 +15,6 @@ public interface CallRecordRepository extends JpaRepository<CallRecord, Long> {
             String phoneNumber,
             Instant callTimestamp,
             Integer durationSeconds);
+
+    boolean existsByContact_Id(Long contactId);
 }

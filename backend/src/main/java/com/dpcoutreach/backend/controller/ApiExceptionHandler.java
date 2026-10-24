@@ -1,6 +1,8 @@
 package com.dpcoutreach.backend.controller;
 
 import com.dpcoutreach.backend.dto.ApiErrorResponse;
+import com.dpcoutreach.backend.service.AdminResourceConflictException;
+import com.dpcoutreach.backend.service.AdminResourceNotFoundException;
 import com.dpcoutreach.backend.service.AmbiguousContactMatchException;
 import com.dpcoutreach.backend.service.CallRecordNotFoundException;
 import com.dpcoutreach.backend.service.DpcNotFoundException;
@@ -35,6 +37,16 @@ public class ApiExceptionHandler {
     @ExceptionHandler(CallRecordNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleCallRecordNotFound(CallRecordNotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(AdminResourceNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleAdminResourceNotFound(AdminResourceNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(AdminResourceConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleAdminResourceConflict(AdminResourceConflictException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
     }
 
     @ExceptionHandler(AmbiguousContactMatchException.class)

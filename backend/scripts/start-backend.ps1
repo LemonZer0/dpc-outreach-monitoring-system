@@ -8,6 +8,11 @@ $previousProfiles = $env:SPRING_PROFILES_ACTIVE
 $hadPreviousDemoPhone = Test-Path Env:DEMO_CONTACT_PHONE
 $previousDemoPhone = $env:DEMO_CONTACT_PHONE
 $passwordBuffer = [IntPtr]::Zero
+$adminPasswordBuffer = [IntPtr]::Zero
+$hadPreviousAdminUsername = Test-Path Env:ADMIN_USERNAME
+$previousAdminUsername = $env:ADMIN_USERNAME
+$hadPreviousAdminPassword = Test-Path Env:ADMIN_PASSWORD
+$previousAdminPassword = $env:ADMIN_PASSWORD
 $showMavenLogs = $true
 
 do {
@@ -62,6 +67,25 @@ if ($enableDemoMode) {
 }
 
 try {
+    if ([string]::IsNullOrWhiteSpace($env:ADMIN_USERNAME)) {
+        do {
+            $env:ADMIN_USERNAME = (Read-Host "Admin username for contact/company write access").Trim()
+            if ([string]::IsNullOrWhiteSpace($env:ADMIN_USERNAME)) {
+                Write-Host "An admin username is required to enable protected write operations." -ForegroundColor Yellow
+            }
+        } while ([string]::IsNullOrWhiteSpace($env:ADMIN_USERNAME))
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:ADMIN_PASSWORD)) {
+        $secureAdminPassword = Read-Host "Admin password for '$env:ADMIN_USERNAME'" -AsSecureString
+        if ($secureAdminPassword.Length -eq 0) {
+            throw "The admin password cannot be empty."
+        }
+
+        $adminPasswordBuffer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureAdminPassword)
+        $env:ADMIN_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($adminPasswordBuffer)
+    }
+
     if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) {
         $securePassword = Read-Host "PostgreSQL password for user 'postgres'" -AsSecureString
         if ($securePassword.Length -eq 0) {
@@ -126,6 +150,9 @@ try {
     if ($passwordBuffer -ne [IntPtr]::Zero) {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordBuffer)
     }
+    if ($adminPasswordBuffer -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($adminPasswordBuffer)
+    }
 
     if ($hadPreviousPassword) {
         $env:DB_PASSWORD = $previousPassword
@@ -143,5 +170,16 @@ try {
         $env:DEMO_CONTACT_PHONE = $previousDemoPhone
     } else {
         Remove-Item Env:DEMO_CONTACT_PHONE -ErrorAction SilentlyContinue
+    }
+
+    if ($hadPreviousAdminUsername) {
+        $env:ADMIN_USERNAME = $previousAdminUsername
+    } else {
+        Remove-Item Env:ADMIN_USERNAME -ErrorAction SilentlyContinue
+    }
+    if ($hadPreviousAdminPassword) {
+        $env:ADMIN_PASSWORD = $previousAdminPassword
+    } else {
+        Remove-Item Env:ADMIN_PASSWORD -ErrorAction SilentlyContinue
     }
 }

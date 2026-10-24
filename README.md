@@ -60,16 +60,20 @@ cd backend
 
 The launcher asks whether to show Maven logs, whether to enable demo mode,
 and (if enabled) which phone number to use for the demo contact. If
-`DB_PASSWORD` is not already set in the current PowerShell session, it then
-asks for it using a masked prompt. These launch settings are restored after
-the backend stops; the password is not saved to a file. A successful
-application startup confirms the PostgreSQL connection.
+`ADMIN_USERNAME` and `ADMIN_PASSWORD` are not already set, it prompts for
+admin credentials; the password prompt is masked. If `DB_PASSWORD` is not
+already set, it also asks for the PostgreSQL password using a masked prompt.
+These launch settings are restored after the backend stops; passwords are
+not saved to a file. A successful application startup confirms the
+PostgreSQL connection.
 
 To start manually and enable demo data instead, run:
 
 ```powershell
 cd backend
 $env:DB_PASSWORD = "your-local-database-password"
+$env:ADMIN_USERNAME = "admin"
+$env:ADMIN_PASSWORD = "your-local-admin-password"
 $env:DEMO_CONTACT_PHONE = "+91 98765 43210"
 $env:SPRING_PROFILES_ACTIVE = "demo"
 .\mvnw.cmd spring-boot:run
@@ -86,8 +90,37 @@ second PowerShell window in `backend/` and run:
 ```
 
 The menu lets you check backend health, submit call log data, retrieve a
-record by ID, and list records by DPC ID. The backend URL defaults to
-`http://localhost:8080`; set `DPC_API_BASE_URL` to use another host.
+record by ID, list records by DPC ID, and list known contacts. The backend
+URL defaults to `http://localhost:8080`; set `DPC_API_BASE_URL` to use
+another host.
+
+The contact directory is available at `GET /api/contacts`. Each entry
+includes the contact ID, name, phone number, and company ID and name.
+This list is optional convenience data; call submissions are still
+matched by phone number and are not restricted to listed contacts.
+
+## Admin contact and company management
+
+Start the backend with `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured,
+then open another PowerShell window in `backend/` and run:
+
+```powershell
+.\scripts\admin-client.ps1
+```
+
+The admin client prompts for the configured username and password, then
+lets an administrator create, edit, and delete contacts; create and rename
+companies; and list companies. Contact numbers are normalized when saved.
+Contacts with call history cannot be deleted, and companies cannot be
+deleted while they have contacts or outreach history. Delete actions
+require typing `DELETE`.
+
+Admin write and company-management routes require HTTP Basic credentials:
+`POST`, `PUT`, and `DELETE /api/admin/contacts`, and the corresponding
+`/api/admin/companies` routes. Contact listing and call-record APIs remain
+available without admin credentials. The admin script permits HTTP only
+for a loopback backend; use HTTPS for a remote backend because Basic
+credentials must not be sent over an unencrypted connection.
 
 ## Main Components
 

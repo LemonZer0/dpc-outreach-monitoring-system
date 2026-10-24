@@ -55,7 +55,8 @@ do {
     Write-Host "2. Submit call log data"
     Write-Host "3. Get a call record by ID"
     Write-Host "4. List call records by DPC ID"
-    Write-Host "5. Exit"
+    Write-Host "5. List known contacts"
+    Write-Host "6. Exit"
     $choice = Read-Host "Choose an option"
 
     try {
@@ -78,13 +79,17 @@ do {
                 Show-Response $response
             }
             "5" {
+                $response = Invoke-RestMethod -Uri "$apiBaseUrl/api/contacts" -Method Get
+                Show-Response $response
+            }
+            "6" {
                 Write-Host "Goodbye."
             }
             default {
-                Write-Host "Choose an option from 1 to 5." -ForegroundColor Yellow
+                Write-Host "Choose an option from 1 to 6." -ForegroundColor Yellow
             }
         }
     } catch {
         Show-RequestError $_
     }
-} while ($choice -ne "5")
+} while ($choice -ne "6")

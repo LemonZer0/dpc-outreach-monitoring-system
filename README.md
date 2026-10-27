@@ -102,7 +102,7 @@ matched by phone number and are not restricted to listed contacts.
 The read-only `GET /api/dpcs` endpoint lists DPC IDs and names for
 dashboard selection; it does not expose account information.
 
-## Read-only dashboard
+## Dashboard
 
 Start the backend, then open a second PowerShell window at the repository
 root and serve the dashboard locally:
@@ -111,35 +111,48 @@ root and serve the dashboard locally:
 py -m http.server 8000 --bind 127.0.0.1 --directory dashboard
 ```
 
-Open `http://127.0.0.1:8000`, choose **Load DPC list**, then select a DPC
-by name. Its ID is shown next to the name and below the selector; choose
-**Load dashboard** to view that DPC's call records and each company's
-latest outreach status. The DPC directory returns only IDs and names.
-The dashboard is read-only and sends GET requests only. The backend
-allows browser requests from this local dashboard origin.
+Open `http://127.0.0.1:8000`, enter the backend URL, and press Enter or
+select **Continue**. Choose **Sign in** for the outreach dashboard, or
+**Sign in as Admin** and enter the configured admin credentials for the
+management dashboard. The normal dashboard lets a user select a DPC by
+name and review its calls, latest call-verification results, and company
+outreach decisions.
+
+The admin dashboard lets CORE create, rename, and delete companies; create,
+edit, and delete contacts; create DPC entries; and set each company's
+manual decision to `Confirmed`, `Pending`, `Declined`, or `Not set`.
+Contact numbers are normalized by the backend. Deletes that conflict with
+existing call or outreach history are rejected and the backend error is shown. Call
+verification remains automatic and separate from the manual decision.
+Admin credentials are validated by the backend, held only in memory, and
+cleared on logout; they are not saved in browser storage. The backend
+permits dashboard requests only from the documented local origins; use
+HTTPS for a remote backend.
 
 ## Admin contact and company management
 
-Start the backend with `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured,
-then open another PowerShell window in `backend/` and run:
+Start the backend with `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured.
+Admin contact and company management is available in the dashboard or
+through the optional command-line client. To use the client, open another
+PowerShell window in `backend/` and run:
 
 ```powershell
 .\scripts\admin-client.ps1
 ```
 
-The admin client prompts for the configured username and password, then
-lets an administrator create, edit, and delete contacts; create and rename
-companies; and list companies. Contact numbers are normalized when saved.
-Contacts with call history cannot be deleted, and companies cannot be
-deleted while they have contacts or outreach history. Delete actions
-require typing `DELETE`.
+The admin client prompts for the configured username and password and
+provides the same contact and company operations. Contacts with call
+history cannot be deleted, and companies cannot be deleted while they
+have contacts or outreach history.
 
-Admin write and company-management routes require HTTP Basic credentials:
-`POST`, `PUT`, and `DELETE /api/admin/contacts`, and the corresponding
-`/api/admin/companies` routes. Contact listing and call-record APIs remain
-available without admin credentials. The admin script permits HTTP only
-for a loopback backend; use HTTPS for a remote backend because Basic
-credentials must not be sent over an unencrypted connection.
+Admin write and company-management routes require HTTP Basic credentials.
+These include `POST /api/admin/dpcs`; the `POST`, `PUT`, and `DELETE`
+company and contact routes; and
+`PUT /api/admin/companies/{companyId}/outreach-status`. Contact listing,
+DPC listing, call-record, and outreach-status read APIs remain available
+without admin credentials. Admin tools permit HTTP only for a loopback
+backend; use HTTPS for a remote backend because Basic credentials must not
+be sent over an unencrypted connection.
 
 ## Main Components
 

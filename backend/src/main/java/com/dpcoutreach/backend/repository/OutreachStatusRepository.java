@@ -13,4 +13,6 @@ public interface OutreachStatusRepository extends JpaRepository<OutreachStatus, 
 
     @EntityGraph(attributePaths = {"company", "latestCallRecord"})
     List<OutreachStatus> findAllByOrderByUpdatedAtDesc();
+
+    boolean existsByCompanyId(Long companyId);
 }

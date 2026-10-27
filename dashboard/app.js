@@ -1,4 +1,19 @@
 const backendInput = document.querySelector("#backend-url");
+const connectForm = document.querySelector("#connect-form");
+const connectButton = document.querySelector("#connect-button");
+const modePanel = document.querySelector("#mode-panel");
+const normalModeButton = document.querySelector("#normal-mode-button");
+const adminModeButton = document.querySelector("#admin-mode-button");
+const adminSigninForm = document.querySelector("#admin-signin-form");
+const adminUsername = document.querySelector("#admin-username");
+const adminPassword = document.querySelector("#admin-password");
+const adminSigninButton = document.querySelector("#admin-signin-button");
+const adminSigninMessage = document.querySelector("#admin-signin-message");
+const connectionPanel = document.querySelector("#connection-panel");
+const normalDashboard = document.querySelector("#normal-dashboard");
+const adminDashboard = document.querySelector("#admin-dashboard");
+const pageTitle = document.querySelector("#page-title");
+const pageSubtitle = document.querySelector("#page-subtitle");
 const dpcSelect = document.querySelector("#dpc-select");
 const dpcSelection = document.querySelector("#dpc-selection");
 const refreshButton = document.querySelector("#refresh-button");
@@ -6,8 +21,29 @@ const loadDpcsButton = document.querySelector("#load-dpcs-button");
 const connectionState = document.querySelector("#connection-state");
 const connectionLabel = document.querySelector("#connection-label");
 const errorMessage = document.querySelector("#error-message");
+const normalErrorMessage = document.querySelector("#normal-error");
 const callsBody = document.querySelector("#calls-body");
 const companiesBody = document.querySelector("#companies-body");
+const adminCompaniesBody = document.querySelector("#admin-companies-body");
+const adminContactsBody = document.querySelector("#admin-contacts-body");
+const adminStatusesBody = document.querySelector("#admin-statuses-body");
+const adminDpcsBody = document.querySelector("#admin-dpcs-body");
+const adminDashboardMessage = document.querySelector("#admin-dashboard-message");
+const dpcForm = document.querySelector("#dpc-form");
+const dpcNameInput = document.querySelector("#dpc-name");
+const dpcSaveButton = document.querySelector("#dpc-save-button");
+const companyForm = document.querySelector("#company-form");
+const companyIdInput = document.querySelector("#company-id");
+const companyNameInput = document.querySelector("#company-name");
+const companySaveButton = document.querySelector("#company-save-button");
+const companyCancelButton = document.querySelector("#company-cancel-button");
+const contactForm = document.querySelector("#contact-form");
+const contactIdInput = document.querySelector("#contact-id");
+const contactNameInput = document.querySelector("#contact-name");
+const contactPhoneInput = document.querySelector("#contact-phone");
+const contactCompanySelect = document.querySelector("#contact-company");
+const contactSaveButton = document.querySelector("#contact-save-button");
+const contactCancelButton = document.querySelector("#contact-cancel-button");
 const statusFilter = document.querySelector("#status-filter");
 const searchFilter = document.querySelector("#search-filter");
 
@@ -16,13 +52,49 @@ const state = {
   calls: [],
   contacts: new Map(),
   companies: [],
+  adminCredentials: null,
+  adminCompanies: [],
+  adminContacts: [],
+  adminDpcs: [],
+  adminOutreachStatuses: [],
 };
 
 backendInput.value = localStorage.getItem("dpc-dashboard-backend-url") || backendInput.value;
 
+connectForm.addEventListener("submit", connectToBackend);
+normalModeButton.addEventListener("click", openNormalDashboard);
+adminModeButton.addEventListener("click", () => {
+  adminSigninForm.hidden = false;
+  adminUsername.focus();
+});
+adminSigninForm.addEventListener("submit", loginAdmin);
+document.querySelector("#change-backend-button").addEventListener("click", () => {
+  state.adminCredentials = null;
+  adminUsername.value = "";
+  adminPassword.value = "";
+  adminSigninForm.hidden = true;
+  modePanel.hidden = true;
+  connectionPanel.hidden = false;
+  pageSubtitle.textContent = "Connect to the backend to continue.";
+  setConnection("Not connected");
+  backendInput.focus();
+});
 refreshButton.addEventListener("click", loadDashboard);
 loadDpcsButton.addEventListener("click", loadDpcs);
-backendInput.addEventListener("change", clearDpcSelection);
+backendInput.addEventListener("change", () => {
+  clearDpcSelection();
+});
+document.querySelector("#normal-back-button").addEventListener("click", returnToModeChoice);
+document.querySelector("#admin-back-button").addEventListener("click", () => {
+  state.adminCredentials = null;
+  returnToModeChoice();
+});
+document.querySelector("#admin-logout-button").addEventListener("click", () => {
+  state.adminCredentials = null;
+  returnToModeChoice();
+});
+document.querySelector("#admin-refresh-button").addEventListener("click", loadAdminData);
+dpcForm.addEventListener("submit", saveDpc);
 dpcSelect.addEventListener("change", () => {
   const dpc = state.dpcs.find((item) => String(item.id) === dpcSelect.value);
   dpcSelection.textContent = dpc
@@ -37,6 +109,13 @@ dpcSelect.addEventListener("change", () => {
 });
 statusFilter.addEventListener("change", renderCalls);
 searchFilter.addEventListener("input", renderCalls);
+companyForm.addEventListener("submit", saveCompany);
+companyCancelButton.addEventListener("click", resetCompanyForm);
+contactForm.addEventListener("submit", saveContact);
+contactCancelButton.addEventListener("click", resetContactForm);
+adminCompaniesBody.addEventListener("click", handleCompanyAction);
+adminStatusesBody.addEventListener("change", updateCoreOutreachStatus);
+adminContactsBody.addEventListener("click", handleContactAction);
 
 function setConnection(label, mode = "") {
   connectionLabel.textContent = label;
@@ -46,6 +125,82 @@ function setConnection(label, mode = "") {
 function setError(message) {
   errorMessage.textContent = message;
   errorMessage.hidden = !message;
+}
+
+function setNormalError(message) {
+  normalErrorMessage.textContent = message;
+  normalErrorMessage.hidden = !message;
+}
+
+function showAdminMessage(message, isError = false) {
+  adminDashboardMessage.textContent = message;
+  adminDashboardMessage.className = `form-message ${isError ? "error" : "success"}`.trim();
+}
+
+async function connectToBackend(event) {
+  event.preventDefault();
+  setError("");
+
+  let baseUrl;
+  try {
+    baseUrl = apiBaseUrl();
+  } catch (error) {
+    setError(error.message || "Enter a valid backend URL.");
+    backendInput.focus();
+    return;
+  }
+
+  connectButton.disabled = true;
+  connectButton.textContent = "Connecting…";
+  setConnection("Checking backend…", "loading");
+  try {
+    const health = await getJson(baseUrl, "/api/health");
+    if (health.status !== "UP") {
+      throw new Error("The backend health check did not report UP.");
+    }
+
+    localStorage.setItem("dpc-dashboard-backend-url", baseUrl);
+    connectionPanel.hidden = true;
+    modePanel.hidden = false;
+    setConnection("Backend connected", "connected");
+    pageSubtitle.textContent = "Choose the dashboard that matches your role.";
+  } catch (error) {
+    setConnection("Connection failed");
+    setError(`${error.message || "Could not connect to the backend."} Check the URL and try again.`);
+  } finally {
+    connectButton.disabled = false;
+    connectButton.textContent = "Continue";
+  }
+}
+
+async function openNormalDashboard() {
+  adminUsername.value = "";
+  adminPassword.value = "";
+  adminSigninForm.hidden = true;
+  adminSigninMessage.hidden = true;
+  modePanel.hidden = true;
+  normalDashboard.hidden = false;
+  pageTitle.textContent = "Outreach overview";
+  pageSubtitle.textContent = "Call activity, verification, and company follow-ups.";
+  setNormalError("");
+  await loadDpcs();
+}
+
+function returnToModeChoice() {
+  state.adminCredentials = null;
+  normalDashboard.hidden = true;
+  adminDashboard.hidden = true;
+  connectionPanel.hidden = true;
+  modePanel.hidden = false;
+  adminSigninForm.hidden = true;
+  adminSigninMessage.hidden = true;
+  adminUsername.value = "";
+  adminPassword.value = "";
+  resetCompanyForm();
+  resetContactForm();
+  pageTitle.textContent = "DPC Outreach Monitor";
+  pageSubtitle.textContent = "Choose the dashboard that matches your role.";
+  setConnection("Backend connected", "connected");
 }
 
 function clearDpcSelection() {
@@ -78,16 +233,21 @@ async function getJson(baseUrl, path) {
 }
 
 async function loadDashboard() {
-  setError("");
+  setNormalError("");
   const dpcId = Number(dpcSelect.value);
   if (!Number.isSafeInteger(dpcId) || dpcId < 1) {
-    setError("Load the DPC list and select a DPC first.");
+    setNormalError("Load the DPC list and select a DPC first.");
     dpcSelect.focus();
     return;
   }
 
-  const baseUrl = getBaseUrl();
-  if (!baseUrl) return;
+  let baseUrl;
+  try {
+    baseUrl = apiBaseUrl();
+  } catch (error) {
+    setNormalError(error.message || "Enter a valid backend URL.");
+    return;
+  }
 
   refreshButton.disabled = true;
   refreshButton.textContent = "Loading…";
@@ -115,29 +275,22 @@ async function loadDashboard() {
     setConnection("Backend connected", "connected");
   } catch (error) {
     setConnection("Connection failed");
-    setError(`${error.message || "Could not load dashboard data."} Check that the backend is running and try again.`);
+    setNormalError(`${error.message || "Could not load dashboard data."} Check that the backend is running and try again.`);
   } finally {
     refreshButton.textContent = "Refresh dashboard";
     refreshButton.disabled = !dpcSelect.value;
   }
 }
 
-function getBaseUrl() {
-  try {
-    const baseUrl = apiBaseUrl();
-    localStorage.setItem("dpc-dashboard-backend-url", baseUrl);
-    return baseUrl;
-  } catch (error) {
-    setError(error.message || "Enter a valid backend URL.");
-    backendInput.focus();
-    return null;
-  }
-}
-
 async function loadDpcs() {
-  setError("");
-  const baseUrl = getBaseUrl();
-  if (!baseUrl) return;
+  setNormalError("");
+  let baseUrl;
+  try {
+    baseUrl = apiBaseUrl();
+  } catch (error) {
+    setNormalError(error.message || "Enter a valid backend URL.");
+    return;
+  }
 
   const savedDpcId = localStorage.getItem("dpc-dashboard-dpc-id");
   clearDpcSelection();
@@ -175,11 +328,11 @@ async function loadDpcs() {
       refreshButton.disabled = true;
     }
     setConnection("Backend connected", "connected");
-    setError(dpcs.length ? "" : "No DPCs are registered. Add DPC records before using the dashboard.");
+    setNormalError(dpcs.length ? "" : "No DPCs are registered. Add DPC records before using the dashboard.");
   } catch (error) {
     setConnection("Connection failed");
     dpcSelect.replaceChildren(new Option("DPC list unavailable", ""));
-    setError(`${error.message || "Could not load the DPC directory."} Check that the backend is running and try again.`);
+    setNormalError(`${error.message || "Could not load the DPC directory."} Check that the backend is running and try again.`);
   } finally {
     loadDpcsButton.disabled = false;
     loadDpcsButton.textContent = state.dpcs.length ? "Refresh DPC list" : "Load DPC list";
@@ -247,20 +400,466 @@ function renderCalls() {
 function renderCompanies() {
   companiesBody.replaceChildren();
   if (state.companies.length === 0) {
-    addEmptyRow(companiesBody, "No company outreach statuses have been recorded yet.", 4);
+    addEmptyRow(companiesBody, "No companies are registered in the backend.", 5);
     return;
   }
 
   for (const company of state.companies) {
     const row = document.createElement("tr");
+    const decision = company.coreOutreachStatus === "NOT_SET"
+      ? "Not set"
+      : displayStatus(company.coreOutreachStatus || "NOT_SET");
     row.append(
       makeCell(company.companyName),
-      makeCell(company.latestCallTimestamp ? formatDate(company.latestCallTimestamp) : "—"),
-      makeBadgeCell(company.status),
+      makeCell(decision),
+      makeCell(formatDate(company.latestCallTimestamp)),
+      company.status ? makeBadgeCell(company.status) : makeCell("No call recorded"),
       makeCell(formatDate(company.updatedAt)),
     );
     companiesBody.append(row);
   }
+}
+
+async function loginAdmin(event) {
+  event.preventDefault();
+  adminSigninMessage.hidden = true;
+  const username = adminUsername.value.trim();
+  const password = adminPassword.value;
+  if (!username || !password) {
+    showAdminSigninError("Enter both the admin username and password.");
+    return;
+  }
+
+  let baseUrl;
+  try {
+    baseUrl = apiBaseUrl();
+    ensureSecureAdminConnection(baseUrl);
+  } catch (error) {
+    showAdminSigninError(error.message || "Enter a valid backend URL.");
+    return;
+  }
+
+  adminSigninButton.disabled = true;
+  adminSigninButton.textContent = "Signing in…";
+  try {
+    const response = await fetch(`${baseUrl}/api/admin/companies`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: basicAuthorization(username, password),
+      },
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("Admin sign-in failed. Check the username and password.");
+    }
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`Could not verify admin access (HTTP ${response.status}${details ? `: ${details}` : ""}).`);
+    }
+    const companies = await response.json();
+    if (!Array.isArray(companies)) {
+      throw new Error("Backend returned an unexpected response while verifying admin access.");
+    }
+
+    state.adminCredentials = { username, password };
+    state.adminCompanies = companies;
+    adminPassword.value = "";
+    modePanel.hidden = true;
+    adminDashboard.hidden = false;
+    pageTitle.textContent = "Admin dashboard";
+    pageSubtitle.textContent = "Manage the company and contact directory and CORE follow-up decisions.";
+    document.querySelector("#admin-welcome").textContent = `Signed in as ${username}`;
+    setConnection("Admin signed in", "connected");
+    await loadAdminData();
+  } catch (error) {
+    const message = error instanceof TypeError
+      ? "Could not reach the backend. Check that it is running and allows requests from this dashboard."
+      : error.message || "Could not verify admin access.";
+    if (message.includes("Check the username and password")) {
+      adminPassword.value = "";
+    }
+    showAdminSigninError(message);
+  } finally {
+    adminSigninButton.disabled = false;
+    adminSigninButton.textContent = "Sign in as Admin";
+  }
+}
+
+function showAdminSigninError(message) {
+  adminSigninMessage.textContent = message;
+  adminSigninMessage.hidden = false;
+}
+
+async function loadAdminData() {
+  if (!state.adminCredentials) return;
+  const refreshButton = document.querySelector("#admin-refresh-button");
+  refreshButton.disabled = true;
+  refreshButton.textContent = "Refreshing…";
+  try {
+    const [companies, contacts, statuses, dpcs] = await Promise.all([
+      requestAdmin("/api/admin/companies"),
+      getJson(apiBaseUrl(), "/api/contacts"),
+      getJson(apiBaseUrl(), "/api/outreach-statuses"),
+      getJson(apiBaseUrl(), "/api/dpcs"),
+    ]);
+    if (![companies, contacts, statuses, dpcs].every(Array.isArray)) {
+      throw new Error("Backend returned data in an unexpected format.");
+    }
+    state.adminCompanies = companies;
+    state.adminContacts = contacts;
+    state.adminOutreachStatuses = statuses;
+    state.adminDpcs = dpcs;
+    renderAdminDashboard();
+    showAdminMessage("Admin data is up to date.");
+  } catch (error) {
+    showAdminMessage(error.message || "Could not load admin data.", true);
+  } finally {
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Refresh data";
+  }
+}
+
+async function requestAdmin(path, options = {}) {
+  if (!state.adminCredentials) {
+    throw new Error("Sign in as Admin to continue.");
+  }
+  const baseUrl = apiBaseUrl();
+  ensureSecureAdminConnection(baseUrl);
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: basicAuthorization(
+        state.adminCredentials.username,
+        state.adminCredentials.password,
+      ),
+      ...options.headers,
+    },
+  });
+  if (response.status === 401 || response.status === 403) {
+    state.adminCredentials = null;
+    returnToModeChoice();
+    adminSigninForm.hidden = false;
+    showAdminSigninError("Admin session expired or was rejected. Sign in again.");
+    throw new Error("Admin session expired or was rejected. Sign in again.");
+  }
+  try {
+    if (!response.ok) {
+      throw new Error(await responseError(response));
+    }
+    if (response.status === 204) return null;
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error("Backend returned an invalid response.");
+    }
+    throw error;
+  }
+}
+
+async function responseError(response) {
+  const text = await response.text();
+  if (text) {
+    try {
+      const body = JSON.parse(text);
+      const detail = body.detail || body.message || body.title;
+      if (detail) return `Backend returned HTTP ${response.status}: ${detail}`;
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+  }
+  return `Backend returned HTTP ${response.status}${text ? `: ${text}` : ""}`;
+}
+
+function renderAdminDashboard() {
+  const selectedCompanyId = contactCompanySelect.value;
+  const statusByCompany = new Map(
+    state.adminOutreachStatuses.map((status) => [status.companyId, status]),
+  );
+  const companyOptions = state.adminCompanies
+    .map((company) => new Option(company.name, String(company.id)));
+  contactCompanySelect.replaceChildren(new Option("Select a company", ""));
+  for (const option of companyOptions) {
+    contactCompanySelect.add(option);
+  }
+  if (state.adminCompanies.some((company) => String(company.id) === selectedCompanyId)) {
+    contactCompanySelect.value = selectedCompanyId;
+  }
+
+  adminDpcsBody.replaceChildren();
+  if (!state.adminDpcs.length) {
+    addEmptyRow(adminDpcsBody, "No DPCs yet. Create one above.", 2);
+  }
+  for (const dpc of state.adminDpcs) {
+    const row = document.createElement("tr");
+    row.append(makeCell(`#${dpc.id}`), makeCell(dpc.name));
+    adminDpcsBody.append(row);
+  }
+
+  adminCompaniesBody.replaceChildren();
+  if (!state.adminCompanies.length) {
+    addEmptyRow(adminCompaniesBody, "No companies yet. Add one above.", 3);
+  }
+  for (const company of state.adminCompanies) {
+    const status = statusByCompany.get(company.id);
+    const row = document.createElement("tr");
+    const actions = document.createElement("td");
+    actions.append(
+      makeActionButton("Edit", "edit-company", company.id),
+      makeActionButton("Delete", "delete-company", company.id, "button-danger"),
+    );
+    row.append(
+      makeCell(company.name),
+      status ? makeCell(displayStatus(status.coreOutreachStatus || "NOT_SET")) : makeCell("Not set"),
+      actions,
+    );
+    adminCompaniesBody.append(row);
+  }
+
+  adminContactsBody.replaceChildren();
+  if (!state.adminContacts.length) {
+    addEmptyRow(adminContactsBody, "No contacts yet. Add one above.", 4);
+  }
+  for (const contact of state.adminContacts) {
+    const row = document.createElement("tr");
+    const actions = document.createElement("td");
+    actions.append(
+      makeActionButton("Edit", "edit-contact", contact.id),
+      makeActionButton("Delete", "delete-contact", contact.id, "button-danger"),
+    );
+    row.append(
+      makeCell(contact.name),
+      makeCell(contact.phoneNumber),
+      makeCell(contact.companyName),
+      actions,
+    );
+    adminContactsBody.append(row);
+  }
+
+  adminStatusesBody.replaceChildren();
+  if (!state.adminOutreachStatuses.length) {
+    addEmptyRow(adminStatusesBody, "No companies are registered.", 3);
+  }
+  for (const status of state.adminOutreachStatuses) {
+    const row = document.createElement("tr");
+    const statusCell = document.createElement("td");
+    const statusSelect = makeCoreStatusSelect(status.companyId, status.coreOutreachStatus);
+    statusCell.append(statusSelect);
+    row.append(
+      makeCell(status.companyName),
+      statusCell,
+      status.status ? makeBadgeCell(status.status) : makeCell("No call recorded"),
+    );
+    adminStatusesBody.append(row);
+  }
+}
+
+function makeActionButton(label, action, id, className = "button-secondary") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `button button-small ${className}`;
+  button.dataset.action = action;
+  button.dataset.id = String(id);
+  button.textContent = label;
+  return button;
+}
+
+function makeCoreStatusSelect(companyId, value) {
+  const select = document.createElement("select");
+  select.className = "core-status-select";
+  select.dataset.companyId = String(companyId);
+  for (const [status, label] of [
+    ["NOT_SET", "Not set"],
+    ["CONFIRMED", "Confirmed"],
+    ["PENDING", "Pending"],
+    ["DECLINED", "Declined"],
+  ]) {
+    select.add(new Option(label, status));
+  }
+  select.value = value || "NOT_SET";
+  return select;
+}
+
+async function saveDpc(event) {
+  event.preventDefault();
+  const name = dpcNameInput.value.trim();
+  if (!name) return;
+  dpcSaveButton.disabled = true;
+  try {
+    const created = await requestAdmin("/api/admin/dpcs", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    dpcForm.reset();
+    await loadAdminData();
+    showAdminMessage(`Created DPC ${created.name} (ID: ${created.id}).`);
+  } catch (error) {
+    showAdminMessage(error.message || "Could not create DPC.", true);
+  } finally {
+    dpcSaveButton.disabled = false;
+  }
+}
+
+async function saveCompany(event) {
+  event.preventDefault();
+  const id = companyIdInput.value;
+  const name = companyNameInput.value.trim();
+  if (!name) return;
+  const submitButton = companySaveButton;
+  submitButton.disabled = true;
+  try {
+    await requestAdmin(id ? `/api/admin/companies/${id}` : "/api/admin/companies", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify({ name }),
+    });
+    resetCompanyForm();
+    await loadAdminData();
+    showAdminMessage(id ? "Company updated." : "Company created.");
+  } catch (error) {
+    showAdminMessage(error.message || "Could not save company.", true);
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function saveContact(event) {
+  event.preventDefault();
+  const id = contactIdInput.value;
+  const request = {
+    name: contactNameInput.value.trim(),
+    phoneNumber: contactPhoneInput.value.trim(),
+    companyId: Number(contactCompanySelect.value),
+  };
+  if (!request.name || !request.phoneNumber || !request.companyId) return;
+  contactSaveButton.disabled = true;
+  try {
+    await requestAdmin(id ? `/api/admin/contacts/${id}` : "/api/admin/contacts", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(request),
+    });
+    resetContactForm();
+    await loadAdminData();
+    showAdminMessage(id ? "Contact updated." : "Contact created.");
+  } catch (error) {
+    showAdminMessage(error.message || "Could not save contact.", true);
+  } finally {
+    contactSaveButton.disabled = false;
+  }
+}
+
+async function handleCompanyAction(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  const company = state.adminCompanies.find((item) => item.id === id);
+  if (!company) return;
+  if (button.dataset.action === "edit-company") {
+    companyIdInput.value = String(company.id);
+    companyNameInput.value = company.name;
+    companySaveButton.textContent = "Save company";
+    companyCancelButton.hidden = false;
+    companyNameInput.focus();
+    return;
+  }
+  if (button.dataset.action === "delete-company" &&
+      confirm(`Delete ${company.name}? Companies with contacts or outreach history cannot be deleted.`)) {
+    try {
+      await requestAdmin(`/api/admin/companies/${id}`, { method: "DELETE" });
+      await loadAdminData();
+      showAdminMessage("Company deleted.");
+    } catch (error) {
+      showAdminMessage(error.message || "Could not delete company.", true);
+    }
+  }
+}
+
+async function handleContactAction(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  const contact = state.adminContacts.find((item) => item.id === id);
+  if (!contact) return;
+  if (button.dataset.action === "edit-contact") {
+    contactIdInput.value = String(contact.id);
+    contactNameInput.value = contact.name;
+    contactPhoneInput.value = contact.phoneNumber;
+    contactCompanySelect.value = String(contact.companyId);
+    contactSaveButton.textContent = "Save contact";
+    contactCancelButton.hidden = false;
+    contactNameInput.focus();
+    return;
+  }
+  if (button.dataset.action === "delete-contact" &&
+      confirm(`Delete ${contact.name}? Contacts with call history cannot be deleted.`)) {
+    try {
+      await requestAdmin(`/api/admin/contacts/${id}`, { method: "DELETE" });
+      await loadAdminData();
+      showAdminMessage("Contact deleted.");
+    } catch (error) {
+      showAdminMessage(error.message || "Could not delete contact.", true);
+    }
+  }
+}
+
+function resetCompanyForm() {
+  companyIdInput.value = "";
+  companyNameInput.value = "";
+  companySaveButton.textContent = "Add company";
+  companyCancelButton.hidden = true;
+}
+
+function resetContactForm() {
+  contactIdInput.value = "";
+  contactNameInput.value = "";
+  contactPhoneInput.value = "";
+  contactCompanySelect.value = "";
+  contactSaveButton.textContent = "Add contact";
+  contactCancelButton.hidden = true;
+}
+
+async function updateCoreOutreachStatus(event) {
+  const statusSelect = event.target.closest(".core-status-select");
+  if (!statusSelect) return;
+  const companyId = Number(statusSelect.dataset.companyId);
+  const company = state.adminOutreachStatuses.find((item) => item.companyId === companyId);
+  if (!company) return;
+  const previousStatus = company.coreOutreachStatus || "NOT_SET";
+  const selectedStatus = statusSelect.value;
+  statusSelect.disabled = true;
+  try {
+    const updated = await requestAdmin(`/api/admin/companies/${companyId}/outreach-status`, {
+      method: "PUT",
+      body: JSON.stringify({ status: selectedStatus }),
+    });
+    company.coreOutreachStatus = updated.status;
+    company.coreOutreachStatusUpdatedAt = updated.updatedAt;
+    showAdminMessage(`Updated ${company.companyName} to ${displayStatus(updated.status)}.`);
+  } catch (error) {
+    company.coreOutreachStatus = previousStatus;
+    showAdminMessage(error.message || "Could not update outreach decision.", true);
+  } finally {
+    renderAdminDashboard();
+  }
+}
+
+function ensureSecureAdminConnection(baseUrl) {
+  const backend = new URL(baseUrl);
+  if (backend.protocol !== "https:" &&
+      !["localhost", "127.0.0.1", "[::1]"].includes(backend.hostname)) {
+    throw new Error("Use HTTPS before sending admin credentials to a remote backend.");
+  }
+}
+
+function basicAuthorization(username, password) {
+  const bytes = new TextEncoder().encode(`${username}:${password}`);
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  return `Basic ${btoa(binary)}`;
+}
+
+function displayStatus(status) {
+  return String(status).replaceAll("_", " ").toLocaleLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toLocaleUpperCase());
 }
 
 function makeCell(value) {

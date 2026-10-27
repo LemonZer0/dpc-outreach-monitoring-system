@@ -13,8 +13,8 @@
       <header class="page-header">
         <div>
           <p class="eyebrow">PLACEMENT &amp; INTERNSHIP CORE</p>
-          <h1>Outreach overview</h1>
-          <p class="subtitle">A read-only view of submitted calls and company follow-ups.</p>
+          <h1 id="page-title">DPC Outreach Monitor</h1>
+          <p class="subtitle" id="page-subtitle">Connect to the backend to continue.</p>
         </div>
         <div class="connection" id="connection-state" role="status" aria-live="polite">
           <span class="connection-dot" aria-hidden="true"></span>
@@ -22,56 +22,99 @@
         </div>
       </header>
 
-      <section class="panel connection-panel" aria-labelledby="connection-heading">
+      <section class="panel connection-panel" id="connection-panel" aria-labelledby="connection-heading">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">DATA SOURCE</p>
             <h2 id="connection-heading">Connect to the backend</h2>
           </div>
-          <button class="button button-primary" id="refresh-button" type="button" disabled>Load dashboard</button>
         </div>
-        <div class="connection-fields">
+        <form class="connection-fields" id="connect-form">
           <label>
             Backend URL
             <input id="backend-url" type="url" inputmode="url" value="http://localhost:8080"
-              placeholder="http://localhost:8080" autocomplete="url">
+              placeholder="http://localhost:8080" autocomplete="url" required>
           </label>
-          <button class="button button-secondary" id="load-dpcs-button" type="button">Load DPC list</button>
-          <label class="dpc-picker">
-            Select DPC (name — ID)
-            <select id="dpc-select" disabled>
-              <option value="">Load the DPC list first</option>
-            </select>
-          </label>
-        </div>
-        <p class="helper-text" id="dpc-selection">Choose a DPC to see its ID and load its call records.</p>
+          <button class="button button-primary" id="connect-button" type="submit">Continue</button>
+        </form>
         <p class="error-message" id="error-message" role="alert" hidden></p>
       </section>
 
-      <section class="metrics-grid" aria-label="Outreach summary">
-        <article class="metric-card">
-          <span class="metric-label">Call records</span>
-          <strong id="metric-total">—</strong>
-          <span class="metric-note">for this DPC</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Matched contacts</span>
-          <strong id="metric-matched">—</strong>
-          <span class="metric-note">known phone numbers</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Long calls</span>
-          <strong id="metric-long">—</strong>
-          <span class="metric-note">over 60 seconds</span>
-        </article>
-        <article class="metric-card">
-          <span class="metric-label">Companies with status</span>
-          <strong id="metric-companies">—</strong>
-          <span class="metric-note">latest outreach recorded</span>
-        </article>
+      <section class="panel mode-panel" id="mode-panel" hidden aria-labelledby="mode-heading">
+        <div>
+          <p class="eyebrow">CHOOSE YOUR VIEW</p>
+          <h2 id="mode-heading">How would you like to continue?</h2>
+        </div>
+        <div class="mode-options">
+          <button class="mode-option" id="normal-mode-button" type="button">
+            <strong>Sign in</strong>
+            <span>View outreach activity and company follow-ups.</span>
+          </button>
+          <button class="mode-option" id="admin-mode-button" type="button">
+            <strong>Sign in as Admin</strong>
+            <span>Manage companies, contacts, and outreach decisions.</span>
+          </button>
+        </div>
+        <button class="button button-secondary change-backend-button" id="change-backend-button" type="button">Change backend URL</button>
+        <form class="admin-signin" id="admin-signin-form" hidden>
+          <label>
+            Admin username
+            <input id="admin-username" type="text" autocomplete="username" required>
+          </label>
+          <label>
+            Admin password
+            <input id="admin-password" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="button button-primary" id="admin-signin-button" type="submit">Sign in as Admin</button>
+          <p class="form-message" id="admin-signin-message" role="alert" hidden></p>
+        </form>
       </section>
 
-      <section class="panel" aria-labelledby="calls-heading">
+      <div id="normal-dashboard" hidden>
+        <section class="panel dashboard-toolbar">
+          <div>
+            <p class="eyebrow">NORMAL DASHBOARD</p>
+            <strong>Outreach overview</strong>
+          </div>
+          <div class="dashboard-actions">
+            <button class="button button-secondary" id="load-dpcs-button" type="button">Load DPC list</button>
+            <label class="dpc-picker">
+              Select DPC (name — ID)
+              <select id="dpc-select" disabled>
+                <option value="">Load the DPC list first</option>
+              </select>
+            </label>
+            <button class="button button-primary" id="refresh-button" type="button" disabled>Load dashboard</button>
+            <button class="button button-secondary" id="normal-back-button" type="button">Back</button>
+          </div>
+          <p class="helper-text" id="dpc-selection">Choose a DPC to see its ID and load its call records.</p>
+          <p class="error-message" id="normal-error" role="alert" hidden></p>
+        </section>
+
+        <section class="metrics-grid" aria-label="Outreach summary">
+          <article class="metric-card">
+            <span class="metric-label">Call records</span>
+            <strong id="metric-total">—</strong>
+            <span class="metric-note">for this DPC</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Matched contacts</span>
+            <strong id="metric-matched">—</strong>
+            <span class="metric-note">known phone numbers</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Long calls</span>
+            <strong id="metric-long">—</strong>
+            <span class="metric-note">over 60 seconds</span>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Companies tracked</span>
+            <strong id="metric-companies">—</strong>
+            <span class="metric-note">in the company directory</span>
+          </article>
+        </section>
+
+        <section class="panel" aria-labelledby="calls-heading">
         <div class="panel-heading section-heading">
           <div>
             <p class="eyebrow">ACTIVITY</p>
@@ -104,13 +147,13 @@
           </table>
         </div>
         <p class="table-footnote">Showing the latest 100 records returned by the backend.</p>
-      </section>
+        </section>
 
-      <section class="panel" aria-labelledby="companies-heading">
+        <section class="panel" aria-labelledby="companies-heading">
         <div class="panel-heading section-heading">
           <div>
             <p class="eyebrow">FOLLOW-UP</p>
-            <h2 id="companies-heading">Company outreach status</h2>
+            <h2 id="companies-heading">Company outreach decisions</h2>
           </div>
           <span class="scope-note">Latest status across all DPCs</span>
         </div>
@@ -119,18 +162,114 @@
             <thead>
               <tr>
                 <th scope="col">Company</th>
+                <th scope="col">Outreach decision</th>
                 <th scope="col">Latest call</th>
-                <th scope="col">Verification status</th>
-                <th scope="col">Updated</th>
+                <th scope="col">Call verification</th>
+                <th scope="col">Call status updated</th>
               </tr>
             </thead>
             <tbody id="companies-body">
-              <tr><td class="empty-state" colspan="4">Load the dashboard to see company follow-up status.</td></tr>
+              <tr><td class="empty-state" colspan="5">Load the dashboard to see company follow-up status.</td></tr>
             </tbody>
           </table>
         </div>
-      </section>
-      <footer>Call duration is a verification signal only; it does not confirm what was discussed.</footer>
+        </section>
+        <footer>Call duration is a verification signal only; it does not confirm what was discussed.</footer>
+      </div>
+
+      <div id="admin-dashboard" hidden>
+        <section class="panel dashboard-toolbar">
+          <div>
+            <p class="eyebrow">ADMIN DASHBOARD</p>
+            <strong id="admin-welcome">Signed in as Admin</strong>
+          </div>
+          <div class="dashboard-actions">
+            <button class="button button-secondary" id="admin-refresh-button" type="button">Refresh data</button>
+            <button class="button button-secondary" id="admin-back-button" type="button">Sign out &amp; switch</button>
+            <button class="button button-primary" id="admin-logout-button" type="button">Log out</button>
+          </div>
+        </section>
+        <p class="form-message" id="admin-dashboard-message" role="status" aria-live="polite"></p>
+
+        <section class="panel" aria-labelledby="admin-dpcs-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">DIRECTORY</p>
+              <h2 id="admin-dpcs-heading">DPCs</h2>
+            </div>
+          </div>
+          <form class="admin-form" id="dpc-form">
+            <label>DPC name<input id="dpc-name" name="name" required maxlength="200"></label>
+            <button class="button button-primary" id="dpc-save-button" type="submit">Create DPC</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">DPC ID</th><th scope="col">DPC name</th></tr></thead>
+              <tbody id="admin-dpcs-body"><tr><td class="empty-state" colspan="2">Sign in as Admin to manage DPCs.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="admin-companies-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">DIRECTORY</p>
+              <h2 id="admin-companies-heading">Companies</h2>
+            </div>
+          </div>
+          <form class="admin-form" id="company-form">
+            <input id="company-id" type="hidden">
+            <label>Company name<input id="company-name" name="name" required maxlength="200"></label>
+            <button class="button button-primary" id="company-save-button" type="submit">Add company</button>
+            <button class="button button-secondary" id="company-cancel-button" type="button" hidden>Cancel edit</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Company</th><th scope="col">Outreach decision</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="admin-companies-body"><tr><td class="empty-state" colspan="3">Sign in as Admin to manage companies.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="admin-contacts-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">DIRECTORY</p>
+              <h2 id="admin-contacts-heading">Contacts</h2>
+            </div>
+          </div>
+          <form class="admin-form" id="contact-form">
+            <input id="contact-id" type="hidden">
+            <label>Contact name<input id="contact-name" name="name" required maxlength="200"></label>
+            <label>Phone number<input id="contact-phone" name="phoneNumber" type="tel" required maxlength="40"></label>
+            <label>Company<select id="contact-company" name="companyId" required><option value="">Select a company</option></select></label>
+            <button class="button button-primary" id="contact-save-button" type="submit">Add contact</button>
+            <button class="button button-secondary" id="contact-cancel-button" type="button" hidden>Cancel edit</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Contact</th><th scope="col">Phone</th><th scope="col">Company</th><th scope="col">Actions</th></tr></thead>
+              <tbody id="admin-contacts-body"><tr><td class="empty-state" colspan="4">Sign in as Admin to manage contacts.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="admin-statuses-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">FOLLOW-UP</p>
+              <h2 id="admin-statuses-heading">CORE outreach decisions</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Company</th><th scope="col">CORE outreach status</th><th scope="col">Call verification</th></tr></thead>
+              <tbody id="admin-statuses-body"><tr><td class="empty-state" colspan="3">Sign in as Admin to manage outreach decisions.</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+        <footer>Company/contact deletion is blocked when dependent outreach or call records exist.</footer>
+      </div>
     </main>
   </body>
 </html>

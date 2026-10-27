@@ -4,11 +4,16 @@ import com.dpcoutreach.backend.dto.CompanyResponse;
 import com.dpcoutreach.backend.dto.CompanyWriteRequest;
 import com.dpcoutreach.backend.dto.ContactResponse;
 import com.dpcoutreach.backend.dto.ContactWriteRequest;
+import com.dpcoutreach.backend.dto.DpcResponse;
+import com.dpcoutreach.backend.dto.DpcWriteRequest;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
+import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
 import com.dpcoutreach.backend.repository.CompanyRepository;
+import com.dpcoutreach.backend.repository.CoreOutreachStatusRepository;
 import com.dpcoutreach.backend.repository.ContactRepository;
+import com.dpcoutreach.backend.repository.DpcRepository;
 import com.dpcoutreach.backend.repository.OutreachStatusRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,18 +25,24 @@ public class AdminManagementService {
 
     private final CompanyRepository companyRepository;
     private final ContactRepository contactRepository;
+    private final DpcRepository dpcRepository;
     private final CallRecordRepository callRecordRepository;
     private final OutreachStatusRepository outreachStatusRepository;
+    private final CoreOutreachStatusRepository coreOutreachStatusRepository;
 
     public AdminManagementService(
             CompanyRepository companyRepository,
             ContactRepository contactRepository,
+            DpcRepository dpcRepository,
             CallRecordRepository callRecordRepository,
-            OutreachStatusRepository outreachStatusRepository) {
+            OutreachStatusRepository outreachStatusRepository,
+            CoreOutreachStatusRepository coreOutreachStatusRepository) {
         this.companyRepository = companyRepository;
         this.contactRepository = contactRepository;
+        this.dpcRepository = dpcRepository;
         this.callRecordRepository = callRecordRepository;
         this.outreachStatusRepository = outreachStatusRepository;
+        this.coreOutreachStatusRepository = coreOutreachStatusRepository;
     }
 
     @Transactional(readOnly = true)
@@ -39,6 +50,12 @@ public class AdminManagementService {
         return companyRepository.findAllByOrderByNameAsc().stream()
                 .map(CompanyResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public DpcResponse createDpc(DpcWriteRequest request) {
+        Dpc dpc = dpcRepository.save(new Dpc(request.name().trim(), null));
+        return DpcResponse.from(dpc);
     }
 
     @Transactional
@@ -63,6 +80,10 @@ public class AdminManagementService {
         if (outreachStatusRepository.findByCompanyId(companyId).isPresent()) {
             throw new AdminResourceConflictException(
                     "Company with id " + companyId + " cannot be deleted because it has outreach history");
+        }
+        if (coreOutreachStatusRepository.existsByCompanyId(companyId)) {
+            throw new AdminResourceConflictException(
+                    "Company with id " + companyId + " cannot be deleted while it has a CORE outreach status");
         }
         companyRepository.delete(company);
     }

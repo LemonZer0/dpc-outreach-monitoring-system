@@ -1,5 +1,8 @@
 package com.dpcoutreach.backend.dto;
 
+import com.dpcoutreach.backend.entity.Company;
+import com.dpcoutreach.backend.entity.CoreOutreachStatus;
+import com.dpcoutreach.backend.entity.CoreOutreachStatusValue;
 import com.dpcoutreach.backend.entity.OutreachStatus;
 
 import java.time.Instant;
@@ -9,16 +12,23 @@ public record OutreachStatusResponse(
         String companyName,
         String status,
         Instant latestCallTimestamp,
-        Instant updatedAt) {
+        Instant updatedAt,
+        CoreOutreachStatusValue coreOutreachStatus,
+        Instant coreOutreachStatusUpdatedAt) {
 
-    public static OutreachStatusResponse from(OutreachStatus outreachStatus) {
+    public static OutreachStatusResponse from(
+            Company company,
+            OutreachStatus outreachStatus,
+            CoreOutreachStatus coreOutreachStatus) {
         return new OutreachStatusResponse(
-                outreachStatus.getCompany().getId(),
-                outreachStatus.getCompany().getName(),
-                outreachStatus.getStatus(),
-                outreachStatus.getLatestCallRecord() == null
+                company.getId(),
+                company.getName(),
+                outreachStatus == null ? null : outreachStatus.getStatus(),
+                outreachStatus == null || outreachStatus.getLatestCallRecord() == null
                         ? null
                         : outreachStatus.getLatestCallRecord().getCallTimestamp(),
-                outreachStatus.getUpdatedAt());
+                outreachStatus == null ? null : outreachStatus.getUpdatedAt(),
+                coreOutreachStatus == null ? CoreOutreachStatusValue.NOT_SET : coreOutreachStatus.getStatus(),
+                coreOutreachStatus == null ? null : coreOutreachStatus.getUpdatedAt());
     }
 }

@@ -4,11 +4,14 @@ import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
+import com.dpcoutreach.backend.entity.CoreOutreachStatus;
+import com.dpcoutreach.backend.entity.CoreOutreachStatusValue;
 import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.OutreachStatus;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
 import com.dpcoutreach.backend.repository.CompanyRepository;
+import com.dpcoutreach.backend.repository.CoreOutreachStatusRepository;
 import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
 import com.dpcoutreach.backend.repository.OutreachStatusRepository;
@@ -28,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
@@ -39,11 +43,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,9 +86,13 @@ class CallVerificationPostgresIntegrationTest {
     @Autowired
     private OutreachStatusRepository outreachStatusRepository;
 
+    @Autowired
+    private CoreOutreachStatusRepository coreOutreachStatusRepository;
+
     private Company company;
     private Contact contact;
     private Dpc dpc;
+    private Dpc createdAdminDpc;
     private CallSubmissionRequest request;
 
     @BeforeEach
@@ -102,6 +113,8 @@ class CallVerificationPostgresIntegrationTest {
     @AfterEach
     void removeDatabaseFixtures() {
         if (company != null) {
+            coreOutreachStatusRepository.findByCompanyId(company.getId())
+                    .ifPresent(coreOutreachStatusRepository::delete);
             outreachStatusRepository.findByCompanyId(company.getId()).ifPresent(outreachStatusRepository::delete);
         }
         if (dpc != null) {
@@ -116,6 +129,9 @@ class CallVerificationPostgresIntegrationTest {
         }
         if (dpc != null) {
             dpcRepository.delete(dpc);
+        }
+        if (createdAdminDpc != null) {
+            dpcRepository.delete(createdAdminDpc);
         }
     }
 
@@ -227,12 +243,119 @@ class CallVerificationPostgresIntegrationTest {
     void adminRoutesRequireCredentialsWhileContactDirectoryRemainsPublic() throws Exception {
         mockMvc.perform(get("/api/admin/companies"))
                 .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/admin/dpcs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Unauthorized DPC\"}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/admin/companies/" + company.getId() + "/outreach-status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"CONFIRMED\"}"))
+                .andExpect(status().isUnauthorized());
 
         mockMvc.perform(get("/api/contacts"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/admin/companies").header("Authorization", "Basic invalid"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminCanCreateDpcWithoutExposingAccountInformation() throws Exception {
+        String name = "Created DPC " + UUID.randomUUID();
+        String response = mockMvc.perform(post("/api/admin/dpcs")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", name))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.name").value(name))
+                .andExpect(jsonPath("$.accountInformation").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long createdId = objectMapper.readTree(response).get("id").asLong();
+        createdAdminDpc = dpcRepository.findById(createdId).orElseThrow();
+        assertEquals(name, createdAdminDpc.getName());
+        assertNull(createdAdminDpc.getAccountInformation());
+    }
+
+    @Test
+    void localDashboardCanPreflightAuthenticatedStatusUpdate() throws Exception {
+        mockMvc.perform(options("/api/admin/companies/" + company.getId() + "/outreach-status")
+                        .header("Origin", "http://localhost:8000")
+                        .header("Access-Control-Request-Method", "PUT")
+                        .header("Access-Control-Request-Headers", "authorization,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8000"))
+                .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("PUT")));
+    }
+
+    @Test
+    void localDashboardCanPreflightAdminDirectoryChanges() throws Exception {
+        for (var route : List.of(
+                Map.entry("/api/admin/dpcs", "POST"),
+                Map.entry("/api/admin/companies", "DELETE"))) {
+            mockMvc.perform(options(route.getKey())
+                            .header("Origin", "http://localhost:8000")
+                            .header("Access-Control-Request-Method", route.getValue())
+                            .header("Access-Control-Request-Headers", "authorization,content-type"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8000"))
+                    .andExpect(header().string("Access-Control-Allow-Methods",
+                            org.hamcrest.Matchers.containsString(route.getValue())));
+        }
+    }
+
+    @Test
+    void coreCanSetManualOutreachStatusSeparatelyFromCallVerification() throws Exception {
+        assertEquals("NOT_SET", outreachStatusForCompany(company.getId()).get("coreOutreachStatus").asText());
+        callVerificationService.verifyAndSave(request);
+
+        mockMvc.perform(put("/api/admin/companies/" + company.getId() + "/outreach-status")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"PENDING\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.companyId").value(company.getId()))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.updatedAt").isNotEmpty());
+
+        CoreOutreachStatus savedStatus = coreOutreachStatusRepository.findByCompanyId(company.getId())
+                .orElseThrow();
+        assertEquals(CoreOutreachStatusValue.PENDING, savedStatus.getStatus());
+        JsonNode updatedCompanyStatus = outreachStatusForCompany(company.getId());
+        assertEquals("PENDING", updatedCompanyStatus.get("coreOutreachStatus").asText());
+        assertEquals("MATCHED_CONNECTED", updatedCompanyStatus.get("status").asText());
+
+        mockMvc.perform(put("/api/admin/companies/" + company.getId() + "/outreach-status")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"NOT_A_STATUS\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/admin/companies/" + company.getId() + "/outreach-status")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"NOT_SET\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NOT_SET"))
+                .andExpect(jsonPath("$.updatedAt").value(org.hamcrest.Matchers.nullValue()));
+        assertTrue(coreOutreachStatusRepository.findByCompanyId(company.getId()).isEmpty());
+        assertEquals("MATCHED_CONNECTED", outreachStatusForCompany(company.getId()).get("status").asText());
+    }
+
+    private JsonNode outreachStatusForCompany(Long companyId) throws Exception {
+        JsonNode statuses = objectMapper.readTree(mockMvc.perform(get("/api/outreach-statuses"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString());
+        for (JsonNode status : statuses) {
+            if (status.get("companyId").asLong() == companyId) {
+                return status;
+            }
+        }
+        throw new AssertionError("Outreach status was not returned for company " + companyId);
     }
 
     @Test

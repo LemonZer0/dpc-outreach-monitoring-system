@@ -2,9 +2,14 @@ package com.dpcoutreach.backend.controller;
 
 import com.dpcoutreach.backend.dto.CompanyResponse;
 import com.dpcoutreach.backend.dto.CompanyWriteRequest;
+import com.dpcoutreach.backend.dto.CoreOutreachStatusResponse;
+import com.dpcoutreach.backend.dto.CoreOutreachStatusUpdateRequest;
 import com.dpcoutreach.backend.dto.ContactResponse;
 import com.dpcoutreach.backend.dto.ContactWriteRequest;
+import com.dpcoutreach.backend.dto.DpcResponse;
+import com.dpcoutreach.backend.dto.DpcWriteRequest;
 import com.dpcoutreach.backend.service.AdminManagementService;
+import com.dpcoutreach.backend.service.CoreOutreachStatusService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,14 +29,23 @@ import java.util.List;
 public class AdminManagementController {
 
     private final AdminManagementService adminManagementService;
+    private final CoreOutreachStatusService coreOutreachStatusService;
 
-    public AdminManagementController(AdminManagementService adminManagementService) {
+    public AdminManagementController(
+            AdminManagementService adminManagementService,
+            CoreOutreachStatusService coreOutreachStatusService) {
         this.adminManagementService = adminManagementService;
+        this.coreOutreachStatusService = coreOutreachStatusService;
     }
 
     @GetMapping("/companies")
     public List<CompanyResponse> getCompanies() {
         return adminManagementService.findAllCompanies();
+    }
+
+    @PostMapping("/dpcs")
+    public ResponseEntity<DpcResponse> createDpc(@Valid @RequestBody DpcWriteRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(adminManagementService.createDpc(request));
     }
 
     @PostMapping("/companies")
@@ -50,6 +64,13 @@ public class AdminManagementController {
     public ResponseEntity<Void> deleteCompany(@PathVariable Long companyId) {
         adminManagementService.deleteCompany(companyId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/companies/{companyId}/outreach-status")
+    public CoreOutreachStatusResponse updateCompanyOutreachStatus(
+            @PathVariable Long companyId,
+            @Valid @RequestBody CoreOutreachStatusUpdateRequest request) {
+        return coreOutreachStatusService.updateStatus(companyId, request.status());
     }
 
     @PostMapping("/contacts")

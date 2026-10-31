@@ -1,6 +1,7 @@
 package com.dpcoutreach.backend.repository;
 
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Modifying;
@@ -17,6 +18,14 @@ public interface CallRecordRepository extends JpaRepository<CallRecord, Long> {
 
     List<CallRecord> findAllByDpcIdOrderByCallTimestampDesc(Long dpcId);
 
+    List<CallRecord> findAllByDpcIdAndCallSourceOrderByCallTimestampDesc(Long dpcId, CallSource callSource);
+
+    Optional<CallRecord> findFirstByContact_Company_IdAndCallSourceAndVerificationStatusInAndIdNotOrderByCallTimestampDesc(
+            Long companyId,
+            CallSource callSource,
+            List<VerificationStatus> verificationStatuses,
+            Long excludedCallRecordId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select callRecord from CallRecord callRecord where callRecord.id = :id")
     Optional<CallRecord> findByIdForUpdate(@Param("id") Long id);
@@ -26,8 +35,9 @@ public interface CallRecordRepository extends JpaRepository<CallRecord, Long> {
             String phoneNumber,
             VerificationStatus verificationStatus);
 
-    boolean existsByDpcIdAndPhoneNumberAndCallTimestampAndDurationSeconds(
+    boolean existsByDpcIdAndCallSourceAndPhoneNumberAndCallTimestampAndDurationSeconds(
             Long dpcId,
+            CallSource callSource,
             String phoneNumber,
             Instant callTimestamp,
             Integer durationSeconds);

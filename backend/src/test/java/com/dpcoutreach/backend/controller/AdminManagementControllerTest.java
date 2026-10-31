@@ -97,10 +97,10 @@ class AdminManagementControllerTest {
     }
 
     @Test
-    void deletesDuplicateCallRecord() throws Exception {
+    void deletesAnyCallRecord() throws Exception {
         mockMvc.perform(delete("/api/admin/call-records/42"))
                 .andExpect(status().isNoContent());
 
-        verify(adminManagementService).deleteDuplicateCallRecord(42L);
+        verify(adminManagementService).deleteCallRecord(42L);
     }
 }

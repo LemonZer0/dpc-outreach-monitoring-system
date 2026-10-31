@@ -4,6 +4,8 @@ import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.dto.CallRecordResponse;
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
+import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
@@ -133,15 +135,16 @@ class CallRecordControllerTest {
 
     @Test
     void retrievesCallRecordsForDpc() throws Exception {
-        when(callRecordQueryService.findAllByDpcId(7L))
+        when(callRecordQueryService.findAllByDpcIdAndCallSource(7L, CallSource.APP))
                 .thenReturn(List.of(CallRecordResponse.from(callRecord())));
 
         mockMvc.perform(get("/api/call-records").param("dpcId", "7"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].phoneNumber").value("919876543210"))
-                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
+                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"))
+                .andExpect(jsonPath("$[0].callSource").value("APP"));
 
-        verify(callRecordQueryService).findAllByDpcId(7L);
+        verify(callRecordQueryService).findAllByDpcIdAndCallSource(7L, CallSource.APP);
     }
 
     @Test
@@ -177,7 +180,7 @@ class CallRecordControllerTest {
 
     @Test
     void returnsEmptyListWhenDpcHasNoCallRecords() throws Exception {
-        when(callRecordQueryService.findAllByDpcId(7L)).thenReturn(List.of());
+        when(callRecordQueryService.findAllByDpcIdAndCallSource(7L, CallSource.APP)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/call-records").param("dpcId", "7"))
                 .andExpect(status().isOk())
@@ -199,7 +202,8 @@ class CallRecordControllerTest {
                   "dpcId": 1,
                   "phoneNumber": "+91 (98765) 43210",
                   "callTimestamp": "2026-10-13T10:00:00Z",
-                  "durationSeconds": 35
+                  "durationSeconds": 35,
+                  "callType": "DIALER"
                 }
                 """;
     }
@@ -210,6 +214,6 @@ class CallRecordControllerTest {
         Dpc dpc = new Dpc("Example DPC", "account");
         return new CallRecord(
                 dpc, contact, "919876543210", Instant.parse("2026-10-13T10:00:00Z"),
-                35, VerificationStatus.MATCHED_CONNECTED);
+                35, VerificationStatus.MATCHED_CONNECTED, CallSource.APP, CallType.DIALER);
     }
 }

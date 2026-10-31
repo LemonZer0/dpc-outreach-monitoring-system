@@ -1,6 +1,8 @@
 package com.dpcoutreach.backend.dto;
 
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
+import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 
 import java.time.Instant;
@@ -12,7 +14,9 @@ public record CallRecordResponse(
         String phoneNumber,
         Instant callTimestamp,
         Integer durationSeconds,
-        VerificationStatus verificationStatus) {
+        VerificationStatus verificationStatus,
+        CallSource callSource,
+        CallType callType) {
 
     public static CallRecordResponse from(CallRecord callRecord) {
         return new CallRecordResponse(
@@ -22,6 +26,8 @@ public record CallRecordResponse(
                 callRecord.getPhoneNumber(),
                 callRecord.getCallTimestamp(),
                 callRecord.getDurationSeconds(),
-                callRecord.getVerificationStatus());
+                callRecord.getVerificationStatus(),
+                callRecord.getCallSource(),
+                callRecord.getCallType());
     }
 }

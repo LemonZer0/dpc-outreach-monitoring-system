@@ -4,14 +4,35 @@ const connectButton = document.querySelector("#connect-button");
 const modePanel = document.querySelector("#mode-panel");
 const normalModeButton = document.querySelector("#normal-mode-button");
 const adminModeButton = document.querySelector("#admin-mode-button");
+const simulationModeButton = document.querySelector("#simulation-mode-button");
 const adminSigninForm = document.querySelector("#admin-signin-form");
 const adminUsername = document.querySelector("#admin-username");
 const adminPassword = document.querySelector("#admin-password");
 const adminSigninButton = document.querySelector("#admin-signin-button");
 const adminSigninMessage = document.querySelector("#admin-signin-message");
+const simulationSigninForm = document.querySelector("#simulation-signin-form");
+const simulationUsername = document.querySelector("#simulation-username");
+const simulationPassword = document.querySelector("#simulation-password");
+const simulationSigninButton = document.querySelector("#simulation-signin-button");
+const simulationSigninMessage = document.querySelector("#simulation-signin-message");
 const connectionPanel = document.querySelector("#connection-panel");
 const normalDashboard = document.querySelector("#normal-dashboard");
 const adminDashboard = document.querySelector("#admin-dashboard");
+const simulationDashboard = document.querySelector("#simulation-dashboard");
+const simulationEntryView = document.querySelector("#simulation-entry-view");
+const simulationHistoryView = document.querySelector("#simulation-call-history");
+const simulationDpcSelect = document.querySelector("#simulation-dpc");
+const simulationLogDpcSelect = document.querySelector("#simulation-log-dpc");
+const simulationForm = document.querySelector("#simulation-form");
+const simulationContactsBody = document.querySelector("#simulation-contacts-body");
+const simulationContactCount = document.querySelector("#simulation-contact-count");
+const simulationCallsBody = document.querySelector("#simulation-calls-body");
+const simulationHistoryError = document.querySelector("#simulation-history-error");
+const simulationPhoneInput = document.querySelector("#simulation-phone");
+const simulationTimestampInput = document.querySelector("#simulation-timestamp");
+const simulationDurationInput = document.querySelector("#simulation-duration");
+const simulationSubmitButton = document.querySelector("#simulation-submit-button");
+const simulationMessage = document.querySelector("#simulation-message");
 const pageTitle = document.querySelector("#page-title");
 const pageSubtitle = document.querySelector("#page-subtitle");
 const dpcSelect = document.querySelector("#dpc-select");
@@ -69,6 +90,10 @@ const state = {
   contacts: new Map(),
   companies: [],
   adminCredentials: null,
+  simulationCredentials: null,
+  simulationDpcs: [],
+  simulationContacts: [],
+  simulationCalls: [],
   adminCompanies: [],
   adminContacts: [],
   adminDpcs: [],
@@ -87,15 +112,37 @@ backendInput.value = servedByBackend
 connectForm.addEventListener("submit", connectToBackend);
 normalModeButton.addEventListener("click", openNormalDashboard);
 adminModeButton.addEventListener("click", () => {
+  simulationSigninForm.hidden = true;
   adminSigninForm.hidden = false;
   adminUsername.focus();
 });
+simulationModeButton.addEventListener("click", () => {
+  adminSigninForm.hidden = true;
+  simulationSigninForm.hidden = false;
+  simulationUsername.focus();
+});
 adminSigninForm.addEventListener("submit", loginAdmin);
+simulationSigninForm.addEventListener("submit", loginSimulation);
+simulationForm.addEventListener("submit", addSimulatedCall);
+document.querySelector("#simulation-refresh-button").addEventListener("click", loadSimulationDirectory);
+document.querySelector("#simulation-history-button").addEventListener("click", openSimulationCallHistory);
+document.querySelector("#simulation-history-refresh").addEventListener("click", loadSimulationCalls);
+document.querySelector("#simulation-history-back").addEventListener("click", closeSimulationCallHistory);
+simulationLogDpcSelect.addEventListener("change", loadSimulationCalls);
+simulationCallsBody.addEventListener("click", handleSimulationCallAction);
+document.querySelector("#simulation-back-button").addEventListener("click", returnToModeChoice);
 document.querySelector("#change-backend-button").addEventListener("click", () => {
   state.adminCredentials = null;
+  state.simulationCredentials = null;
+  simulationDashboard.hidden = true;
+  simulationHistoryView.hidden = true;
+  simulationEntryView.hidden = false;
   adminUsername.value = "";
   adminPassword.value = "";
+  simulationUsername.value = "";
+  simulationPassword.value = "";
   adminSigninForm.hidden = true;
+  simulationSigninForm.hidden = true;
   modePanel.hidden = true;
   connectionPanel.hidden = false;
   pageSubtitle.textContent = "Connect to the backend to continue.";
@@ -250,14 +297,36 @@ async function openNormalDashboard() {
 
 async function returnToModeChoice() {
   state.adminCredentials = null;
+  state.simulationCredentials = null;
   normalDashboard.hidden = true;
   adminDashboard.hidden = true;
+  simulationDashboard.hidden = true;
+  simulationHistoryView.hidden = true;
+  simulationEntryView.hidden = false;
   connectionPanel.hidden = true;
   modePanel.hidden = false;
   adminSigninForm.hidden = true;
+  simulationSigninForm.hidden = true;
   adminSigninMessage.hidden = true;
+  simulationSigninMessage.hidden = true;
   adminUsername.value = "";
   adminPassword.value = "";
+  simulationUsername.value = "";
+  simulationPassword.value = "";
+  simulationDpcSelect.replaceChildren(new Option("Sign in to load DPCs", ""));
+  simulationLogDpcSelect.replaceChildren(new Option("Sign in to load DPCs", ""));
+  simulationContactsBody.replaceChildren();
+  addEmptyRow(simulationContactsBody, "Sign in to load contacts.", 3);
+  simulationCallsBody.replaceChildren();
+  addEmptyRow(simulationCallsBody, "Select a DPC to view its simulated call logs.", 6);
+  simulationHistoryError.hidden = true;
+  simulationContactCount.textContent = "";
+  simulationForm.reset();
+  setDefaultSimulationTimestamp();
+  simulationMessage.textContent = "";
+  state.simulationDpcs = [];
+  state.simulationContacts = [];
+  state.simulationCalls = [];
   resetCompanyForm();
   resetContactForm();
   pageTitle.textContent = "DPC Outreach Monitor";
@@ -465,7 +534,7 @@ function renderCalls() {
 
   callsBody.replaceChildren();
   if (filteredCalls.length === 0) {
-    addEmptyRow(callsBody, "No call records match this DPC and filter.", 7);
+    addEmptyRow(callsBody, "No call records match this DPC and filter.", 8);
     return;
   }
 
@@ -484,6 +553,7 @@ function renderCalls() {
       makeCell(call.phoneNumber),
       makeCell(formatDuration(call.durationSeconds)),
       makeBadgeCell(displayedVerificationStatus(call)),
+      makeCell(displayCallSource(call)),
       makeCell(`#${call.id}`),
     );
     const actions = document.createElement("td");
@@ -495,17 +565,8 @@ function renderCalls() {
       matchButton.dataset.id = String(call.id);
       matchButton.textContent = "Match to company";
       actions.append(matchButton);
-    } else if (call.verificationStatus === "DUPLICATE_CALL") {
-      const deleteButton = document.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.className = "button button-small button-danger";
-      deleteButton.dataset.action = "delete-duplicate-call";
-      deleteButton.dataset.id = String(call.id);
-      deleteButton.textContent = "Delete duplicate";
-      actions.append(deleteButton);
-    } else {
-      actions.textContent = "—";
     }
+    actions.append(createDeleteCallButton(call.id));
     row.append(actions);
     callsBody.append(row);
   }
@@ -517,16 +578,34 @@ function displayedVerificationStatus(call) {
     : call.verificationStatus;
 }
 
+function displayCallSource(call) {
+  if (call.callSource === "SIMULATION") return "Simulation";
+  if (call.callType === "DIALER") return "App · Dialer";
+  if (call.callType === "MANUAL_METADATA") return "App · Manual metadata";
+  return "App · Type not recorded";
+}
+
+function createDeleteCallButton(id) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button button-small button-danger";
+  button.dataset.action = "delete-call";
+  button.dataset.id = String(id);
+  button.textContent = "Delete call";
+  return button;
+}
+
 function handleCallAction(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const call = state.calls.find((item) => item.id === Number(button.dataset.id));
-  if (button.dataset.action === "delete-duplicate-call") {
-    if (!call || call.verificationStatus !== "DUPLICATE_CALL") return;
+  if (button.dataset.action === "delete-call") {
+    if (!call) return;
     openDeleteConfirmation({
-      kind: "duplicate-call",
+      kind: "call-record",
       id: call.id,
-      description: `Permanently delete duplicate call record #${call.id} (${call.phoneNumber})? This cannot be undone.`,
+      source: "APP",
+      description: `Permanently delete call record #${call.id} (${call.phoneNumber})? This cannot be undone. If it is the latest call for its company, the call-status summary will be recalculated.`,
     });
     return;
   }
@@ -558,6 +637,19 @@ function handleCallAction(event) {
   }
   callMatchDialog.showModal();
   callMatchName.focus();
+}
+
+function handleSimulationCallAction(event) {
+  const button = event.target.closest('button[data-action="delete-call"]');
+  if (!button) return;
+  const call = state.simulationCalls.find((item) => item.id === Number(button.dataset.id));
+  if (!call) return;
+  openDeleteConfirmation({
+    kind: "call-record",
+    id: call.id,
+    source: "SIMULATION",
+    description: `Permanently delete simulated call record #${call.id} (${call.phoneNumber})? This cannot be undone.`,
+  });
 }
 
 function closeCallMatchDialog() {
@@ -623,6 +715,282 @@ function renderCompanies() {
       makeCell(formatDate(company.updatedAt)),
     );
     companiesBody.append(row);
+  }
+}
+
+async function loginSimulation(event) {
+  event.preventDefault();
+  simulationSigninMessage.hidden = true;
+  const username = simulationUsername.value.trim();
+  const password = simulationPassword.value;
+  if (!username || !password) {
+    showSimulationSigninError("Enter both the admin username and password.");
+    return;
+  }
+
+  try {
+    ensureSecureAdminConnection(apiBaseUrl());
+  } catch (error) {
+    showSimulationSigninError(error.message || "Enter a valid backend URL.");
+    return;
+  }
+
+  simulationSigninButton.disabled = true;
+  simulationSigninButton.textContent = "Signing in…";
+  try {
+    await requestAdminWithCredentials("/api/admin/companies", {}, username, password);
+    const [dpcs, contacts] = await Promise.all([
+      getJson(apiBaseUrl(), "/api/dpcs"),
+      getJson(apiBaseUrl(), "/api/contacts"),
+    ]);
+    if (!Array.isArray(dpcs) || !Array.isArray(contacts)) {
+      throw new Error("Backend returned the DPC or contact directory in an unexpected format.");
+    }
+
+    state.simulationCredentials = { username, password };
+    simulationUsername.value = "";
+    simulationPassword.value = "";
+    modePanel.hidden = true;
+    simulationDashboard.hidden = false;
+    simulationHistoryView.hidden = true;
+    simulationEntryView.hidden = false;
+    pageTitle.textContent = "DPC Simulation";
+    pageSubtitle.textContent = "Add test call logs for an available DPC.";
+    document.querySelector("#simulation-welcome").textContent = `Signed in as ${username}`;
+    setConnection("DPC simulation signed in", "connected");
+    renderSimulationDpcs(dpcs);
+    renderSimulationContacts(contacts);
+    setDefaultSimulationTimestamp();
+    simulationMessage.textContent = dpcs.length
+      ? "Choose a DPC and enter the simulated call details."
+      : "No DPCs are registered. Create a DPC before adding simulated calls.";
+    simulationMessage.className = dpcs.length ? "form-message simulation-message" : "form-message error simulation-message";
+  } catch (error) {
+    const message = error instanceof TypeError
+      ? "Could not reach the backend. Check that it is running and allows requests from this dashboard."
+      : error.message || "Could not verify admin access.";
+    if (message.includes("Check the username and password")) {
+      simulationPassword.value = "";
+    }
+    showSimulationSigninError(message);
+  } finally {
+    simulationSigninButton.disabled = false;
+    simulationSigninButton.textContent = "Sign in for DPC Simulation";
+  }
+}
+
+function showSimulationSigninError(message) {
+  simulationSigninMessage.textContent = message;
+  simulationSigninMessage.hidden = false;
+}
+
+function renderSimulationDpcs(dpcs) {
+  const selectedDpcId = simulationDpcSelect.value;
+  const selectedLogDpcId = simulationLogDpcSelect.value;
+  state.simulationDpcs = dpcs;
+  simulationDpcSelect.replaceChildren(new Option(
+    dpcs.length ? "Select a DPC…" : "No DPCs available",
+    "",
+  ));
+  simulationLogDpcSelect.replaceChildren(new Option(
+    dpcs.length ? "Select a DPC…" : "No DPCs available",
+    "",
+  ));
+  for (const dpc of dpcs) {
+    simulationDpcSelect.add(new Option(`${dpc.name} — ID: ${dpc.id}`, String(dpc.id)));
+    simulationLogDpcSelect.add(new Option(`${dpc.name} — ID: ${dpc.id}`, String(dpc.id)));
+  }
+  if (dpcs.some((dpc) => String(dpc.id) === selectedDpcId)) simulationDpcSelect.value = selectedDpcId;
+  if (dpcs.some((dpc) => String(dpc.id) === selectedLogDpcId)) {
+    simulationLogDpcSelect.value = selectedLogDpcId;
+  }
+  simulationSubmitButton.disabled = dpcs.length === 0;
+}
+
+function renderSimulationContacts(contacts) {
+  state.simulationContacts = contacts;
+  simulationContactsBody.replaceChildren();
+  simulationContactCount.textContent =
+    `${contacts.length} contact${contacts.length === 1 ? "" : "s"}`;
+  if (!contacts.length) {
+    addEmptyRow(simulationContactsBody, "No contacts are registered.", 3);
+    return;
+  }
+  for (const contact of contacts) {
+    const row = document.createElement("tr");
+    row.append(
+      makeCell(contact.name),
+      makeCell(contact.phoneNumber),
+      makeCell(contact.companyName),
+    );
+    simulationContactsBody.append(row);
+  }
+}
+
+function setDefaultSimulationTimestamp() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  simulationTimestampInput.value = now.toISOString().slice(0, 16);
+}
+
+async function openSimulationCallHistory() {
+  simulationEntryView.hidden = true;
+  simulationHistoryView.hidden = false;
+  simulationHistoryError.hidden = true;
+  if (!simulationLogDpcSelect.value && simulationDpcSelect.value) {
+    simulationLogDpcSelect.value = simulationDpcSelect.value;
+  }
+  await loadSimulationCalls();
+}
+
+function closeSimulationCallHistory() {
+  simulationHistoryView.hidden = true;
+  simulationEntryView.hidden = false;
+}
+
+async function loadSimulationCalls() {
+  if (!state.simulationCredentials || simulationHistoryView.hidden) return;
+  simulationHistoryError.hidden = true;
+  const dpcId = Number(simulationLogDpcSelect.value);
+  if (!Number.isSafeInteger(dpcId) || dpcId < 1) {
+    simulationCallsBody.replaceChildren();
+    addEmptyRow(simulationCallsBody, "Select a DPC to view its simulated call logs.", 5);
+    return;
+  }
+
+  const refreshButton = document.querySelector("#simulation-history-refresh");
+  refreshButton.disabled = true;
+  refreshButton.textContent = "Loading…";
+  try {
+    const calls = await requestAdminWithCredentials(
+      `/api/admin/simulation/call-records?dpcId=${encodeURIComponent(dpcId)}`,
+      {},
+      state.simulationCredentials.username,
+      state.simulationCredentials.password,
+    );
+    if (!Array.isArray(calls)) {
+      throw new Error("Backend returned simulated call logs in an unexpected format.");
+    }
+    state.simulationCalls = calls;
+    renderSimulationCalls();
+  } catch (error) {
+    simulationHistoryError.textContent = error.message || "Could not load simulated call logs.";
+    simulationHistoryError.hidden = false;
+    simulationCallsBody.replaceChildren();
+    addEmptyRow(simulationCallsBody, "Could not load simulated call logs.", 6);
+  } finally {
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Load logs";
+  }
+}
+
+function renderSimulationCalls() {
+  simulationCallsBody.replaceChildren();
+  if (state.simulationCalls.length === 0) {
+    addEmptyRow(simulationCallsBody, "No simulated call logs exist for this DPC.", 6);
+    return;
+  }
+  for (const call of state.simulationCalls) {
+    const row = document.createElement("tr");
+    row.append(
+      makeCell(formatDate(call.callTimestamp)),
+      makeCell(call.phoneNumber),
+      makeCell(formatDuration(call.durationSeconds)),
+      makeBadgeCell(displayedVerificationStatus(call)),
+      makeCell(`#${call.id}`),
+    );
+    const actions = document.createElement("td");
+    actions.append(createDeleteCallButton(call.id));
+    row.append(actions);
+    simulationCallsBody.append(row);
+  }
+}
+
+async function loadSimulationDirectory() {
+  if (!state.simulationCredentials) return;
+  const refreshButton = document.querySelector("#simulation-refresh-button");
+  refreshButton.disabled = true;
+  refreshButton.textContent = "Loading…";
+  simulationMessage.textContent = "";
+  try {
+    await requestAdminWithCredentials(
+      "/api/admin/companies",
+      {},
+      state.simulationCredentials.username,
+      state.simulationCredentials.password,
+    );
+    const [dpcs, contacts] = await Promise.all([
+      getJson(apiBaseUrl(), "/api/dpcs"),
+      getJson(apiBaseUrl(), "/api/contacts"),
+    ]);
+    if (!Array.isArray(dpcs) || !Array.isArray(contacts)) {
+      throw new Error("Backend returned the DPC or contact directory in an unexpected format.");
+    }
+    renderSimulationDpcs(dpcs);
+    renderSimulationContacts(contacts);
+    simulationMessage.textContent = dpcs.length
+      ? "DPC and contact directories refreshed."
+      : "No DPCs are registered. Create a DPC before adding simulated calls.";
+    simulationMessage.className = dpcs.length ? "form-message simulation-message" : "form-message error simulation-message";
+  } catch (error) {
+    simulationMessage.textContent = error.message || "Could not refresh the DPC list.";
+    simulationMessage.className = "form-message error simulation-message";
+  } finally {
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Refresh directory";
+  }
+}
+
+async function addSimulatedCall(event) {
+  event.preventDefault();
+  if (!state.simulationCredentials) {
+    simulationMessage.textContent = "Sign in as Admin to add simulated call logs.";
+    simulationMessage.className = "form-message error simulation-message";
+    return;
+  }
+
+  const dpcId = Number(simulationDpcSelect.value);
+  const durationSeconds = Number(simulationDurationInput.value);
+  const callTimestamp = new Date(simulationTimestampInput.value);
+  if (!Number.isSafeInteger(dpcId) || dpcId < 1 ||
+      !Number.isSafeInteger(durationSeconds) || durationSeconds < 0 ||
+      Number.isNaN(callTimestamp.getTime())) {
+    simulationMessage.textContent = "Choose a DPC and enter a valid call time and non-negative whole-number duration.";
+    simulationMessage.className = "form-message error simulation-message";
+    return;
+  }
+
+  simulationSubmitButton.disabled = true;
+  simulationSubmitButton.textContent = "Adding call…";
+  simulationMessage.textContent = "";
+  try {
+    const record = await requestAdminWithCredentials(
+      "/api/admin/simulation/call-records",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          dpcId,
+          phoneNumber: simulationPhoneInput.value.trim(),
+          callTimestamp: callTimestamp.toISOString(),
+          durationSeconds,
+        }),
+      },
+      state.simulationCredentials.username,
+      state.simulationCredentials.password,
+    );
+    const selectedDpc = state.simulationDpcs.find((dpc) => dpc.id === dpcId);
+    simulationForm.reset();
+    if (selectedDpc) simulationDpcSelect.value = String(selectedDpc.id);
+    setDefaultSimulationTimestamp();
+    simulationMessage.textContent =
+      `Call log #${record.id} added for ${selectedDpc?.name || `DPC ${dpcId}`} with status ${displayStatus(record.verificationStatus)}.`;
+    simulationMessage.className = "form-message simulation-message";
+  } catch (error) {
+    simulationMessage.textContent = error.message || "Could not add the simulated call log.";
+    simulationMessage.className = "form-message error simulation-message";
+  } finally {
+    simulationSubmitButton.disabled = state.simulationDpcs.length === 0;
+    simulationSubmitButton.textContent = "Add call log";
   }
 }
 
@@ -1040,7 +1408,7 @@ async function handleContactAction(event) {
 function openDeleteConfirmation(deletion) {
   state.pendingDelete = deletion;
   deleteConfirmDescription.textContent = deletion.description;
-  const needsAdminCredentials = deletion.kind === "duplicate-call";
+  const needsAdminCredentials = deletion.kind === "call-record";
   deleteConfirmUsernameField.hidden = !needsAdminCredentials;
   deleteConfirmUsername.required = needsAdminCredentials;
   deleteConfirmUsername.value = "";
@@ -1068,12 +1436,12 @@ async function confirmDelete(event) {
   const deletion = state.pendingDelete;
   const username = deleteConfirmUsername.value.trim();
   const password = deleteConfirmPassword.value;
-  if (!deletion || !password || (deletion.kind === "duplicate-call" && !username)) return;
+  if (!deletion || !password || (deletion.kind === "call-record" && !username)) return;
 
   deleteConfirmButton.disabled = true;
   deleteConfirmError.hidden = true;
   try {
-    if (deletion.kind === "duplicate-call") {
+    if (deletion.kind === "call-record") {
       await requestAdminWithCredentials(
         `/api/admin/call-records/${deletion.id}`,
         { method: "DELETE" },
@@ -1084,7 +1452,11 @@ async function confirmDelete(event) {
       state.pendingDelete = null;
       deleteConfirmUsername.value = "";
       deleteConfirmPassword.value = "";
-      await loadDashboard();
+      if (deletion.source === "SIMULATION") {
+        await loadSimulationCalls();
+      } else {
+        await loadDashboard();
+      }
       return;
     }
 

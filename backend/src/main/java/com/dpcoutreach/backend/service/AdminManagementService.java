@@ -7,6 +7,7 @@ import com.dpcoutreach.backend.dto.ContactWriteRequest;
 import com.dpcoutreach.backend.dto.DpcResponse;
 import com.dpcoutreach.backend.dto.DpcWriteRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
@@ -20,6 +21,7 @@ import com.dpcoutreach.backend.repository.OutreachStatusRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 @Service
@@ -112,13 +114,33 @@ public class AdminManagementService {
     }
 
     @Transactional
-    public void deleteDuplicateCallRecord(Long callRecordId) {
+    public void deleteCallRecord(Long callRecordId) {
         CallRecord callRecord = callRecordRepository.findByIdForUpdate(callRecordId)
                 .orElseThrow(() -> new CallRecordNotFoundException(callRecordId));
-        if (callRecord.getVerificationStatus() != VerificationStatus.DUPLICATE_CALL) {
-            throw new AdminResourceConflictException(
-                    "Call record with id " + callRecordId + " is not marked as a duplicate");
-        }
+
+        outreachStatusRepository.findByLatestCallRecord_Id(callRecordId).ifPresent(status -> {
+            Long companyId = status.getCompany().getId();
+            callRecordRepository
+                    .findFirstByContact_Company_IdAndCallSourceAndVerificationStatusInAndIdNotOrderByCallTimestampDesc(
+                            companyId,
+                            CallSource.APP,
+                            List.of(
+                                    VerificationStatus.MATCHED_CONNECTED,
+                                    VerificationStatus.MATCHED_LONG_CALL,
+                                    VerificationStatus.MATCHED_NOT_CONNECTED),
+                            callRecordId)
+                    .ifPresentOrElse(
+                            replacement -> {
+                                status.setLatestCallRecord(replacement);
+                                status.setStatus(replacement.getVerificationStatus().name());
+                                status.setUpdatedAt(Instant.now());
+                                outreachStatusRepository.saveAndFlush(status);
+                            },
+                            () -> {
+                                outreachStatusRepository.delete(status);
+                                outreachStatusRepository.flush();
+                            });
+        });
         callRecordRepository.delete(callRecord);
     }
 

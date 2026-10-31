@@ -235,7 +235,7 @@ class MainActivity : Activity() {
             phoneInput.setText(call.phoneNumber)
             timestampInput.setText(Instant.ofEpochMilli(call.timestampMillis).toString())
             durationInput.setText(call.durationSeconds.toString())
-            submitCall(call.phoneNumber, call.timestampMillis, call.durationSeconds)
+            submitCall(call.phoneNumber, call.timestampMillis, call.durationSeconds, "DIALER")
         } catch (securityException: SecurityException) {
             setStatus("Android denied call-log access. Enter the timestamp and duration manually.")
         } catch (exception: Exception) {
@@ -300,10 +300,10 @@ class MainActivity : Activity() {
             setStatus("Enter a non-negative whole number of seconds.")
             return
         }
-        submitCall(phone, timestamp.toEpochMilli(), duration)
+        submitCall(phone, timestamp.toEpochMilli(), duration, "MANUAL_METADATA")
     }
 
-    private fun submitCall(phone: String, timestampMillis: Long, durationSeconds: Int) {
+    private fun submitCall(phone: String, timestampMillis: Long, durationSeconds: Int, callType: String) {
         val dpcId = readDpcId() ?: return
         val endpoint = apiUrl("/api/call-records") ?: return
         saveSettings()
@@ -312,6 +312,7 @@ class MainActivity : Activity() {
             .put("phoneNumber", phone)
             .put("callTimestamp", Instant.ofEpochMilli(timestampMillis).toString())
             .put("durationSeconds", durationSeconds)
+            .put("callType", callType)
         setStatus("Submitting call metadata...")
         runRequest {
             val response = JSONObject(request(endpoint, "POST", payload.toString()))

@@ -58,6 +58,10 @@ cd backend
 .\scripts\start-backend.ps1
 ```
 
+The backend requires JDK 21 or newer. The launcher checks installed JDKs and
+selects a compatible version automatically, including when `JAVA_HOME` points
+to an older Java runtime.
+
 The launcher asks whether to show Maven logs, whether to enable demo mode,
 and (if enabled) which phone number to use for the demo contact. If
 `ADMIN_USERNAME` and `ADMIN_PASSWORD` are not already set, it prompts for
@@ -123,6 +127,22 @@ API. If health succeeds but an API request returns 404, the server is reachable
 but is likely an older or different backend; stop it and start the backend from
 this project before reconnecting.
 
+The **Sign in for DPC Simulation** view requires admin credentials and lets an
+admin create a call log for any registered DPC by entering a phone number,
+call time, and duration. It also lists available contacts with their phone
+numbers and companies; refresh the directory to load the latest DPCs and
+contacts. **View simulated call logs** opens a DPC-filtered history that
+contains only records created by the simulator. The normal dashboard shows
+only Android app submissions and labels each as **Dialer** or **Manual
+metadata**. The simulator history is available only after admin sign-in.
+Simulated and app calls use the same verification rules.
+
+The Android app marks calls found in the outgoing call log as `DIALER` and
+manually entered timestamps and durations as `MANUAL_METADATA`. Records
+created from the simulation form are stored as `SIMULATION`. Existing records
+are preserved as app submissions; their type remains unrecorded because older
+versions did not distinguish dialer calls from manual metadata.
+
 The admin dashboard lets CORE create, rename, and delete companies; create,
 edit, and delete contacts; create DPC entries; and set each company's
 manual decision to `Confirmed`, `Pending`, `Declined`, or `Not set`.
@@ -131,9 +151,10 @@ requires re-entering the current admin password. Call records are retained and
 become unmatched when their contact is deleted; deleting a company also removes
 its contacts and outreach statuses. Call verification remains automatic and
 separate from the manual decision.
-Duplicate call records can be permanently deleted from the normal call log
-after confirming with admin credentials; other call records cannot be deleted
-through this action.
+Any call record in the normal or simulated call log can be permanently deleted
+after confirming with admin credentials. If deleting the latest app call for
+a company, the dashboard recalculates that company's call-verification summary
+from its latest remaining eligible app call.
 The dashboard and command-line client both require password confirmation for
 deletes.
 Admin credentials are validated by the backend, held only in memory, and
@@ -163,6 +184,10 @@ DPC listing, call-record, and outreach-status read APIs remain available
 without admin credentials. Admin tools permit HTTP only for a loopback
 backend; use HTTPS for a remote backend because Basic credentials must not
 be sent over an unencrypted connection.
+
+`GET /api/call-records?dpcId={dpcId}` lists app-submitted calls only.
+Simulation call history uses the admin-protected
+`GET /api/admin/simulation/call-records?dpcId={dpcId}` endpoint.
 
 ## Main Components
 

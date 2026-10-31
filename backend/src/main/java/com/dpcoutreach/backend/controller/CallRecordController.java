@@ -4,6 +4,7 @@ import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.dto.CallRecordResponse;
 import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
 import jakarta.validation.Valid;
@@ -41,7 +42,7 @@ public class CallRecordController {
 
     @GetMapping
     public List<CallRecordResponse> getCallRecords(@RequestParam Long dpcId) {
-        return callRecordQueryService.findAllByDpcId(dpcId);
+        return callRecordQueryService.findAllByDpcIdAndCallSource(dpcId, CallSource.APP);
     }
 
     @PostMapping("/{id}/match")

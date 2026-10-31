@@ -44,6 +44,14 @@ public class CallRecord {
     @Column(nullable = false)
     private VerificationStatus verificationStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "call_source", nullable = false)
+    private CallSource callSource;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "call_type")
+    private CallType callType;
+
     protected CallRecord() {
         // Required by JPA
     }
@@ -55,12 +63,26 @@ public class CallRecord {
             Instant callTimestamp,
             Integer durationSeconds,
             VerificationStatus verificationStatus) {
+        this(dpc, contact, phoneNumber, callTimestamp, durationSeconds, verificationStatus, CallSource.APP, null);
+    }
+
+    public CallRecord(
+            Dpc dpc,
+            Contact contact,
+            String phoneNumber,
+            Instant callTimestamp,
+            Integer durationSeconds,
+            VerificationStatus verificationStatus,
+            CallSource callSource,
+            CallType callType) {
         this.dpc = dpc;
         this.contact = contact;
         this.phoneNumber = phoneNumber;
         this.callTimestamp = callTimestamp;
         this.durationSeconds = durationSeconds;
         this.verificationStatus = verificationStatus;
+        this.callSource = callSource;
+        this.callType = callType;
     }
 
     public Long getId() {
@@ -93,6 +115,14 @@ public class CallRecord {
 
     public VerificationStatus getVerificationStatus() {
         return verificationStatus;
+    }
+
+    public CallSource getCallSource() {
+        return callSource;
+    }
+
+    public CallType getCallType() {
+        return callType;
     }
 
     public void setVerificationStatus(VerificationStatus verificationStatus) {

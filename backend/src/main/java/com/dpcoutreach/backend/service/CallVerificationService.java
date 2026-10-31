@@ -3,6 +3,8 @@ package com.dpcoutreach.backend.service;
 import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
+import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
@@ -47,13 +49,27 @@ public class CallVerificationService {
 
     @Transactional
     public CallRecord verifyAndSave(CallSubmissionRequest request) {
+        CallType callType = request == null || request.callType() == null
+                ? CallType.MANUAL_METADATA
+                : request.callType();
+        return verifyAndSave(request, CallSource.APP, callType);
+    }
+
+    @Transactional
+    public CallRecord verifyAndSaveSimulation(CallSubmissionRequest request) {
+        return verifyAndSave(request, CallSource.SIMULATION, null);
+    }
+
+    private CallRecord verifyAndSave(CallSubmissionRequest request, CallSource callSource, CallType callType) {
         validateRequest(request);
         Dpc dpc = dpcRepository.findByIdForUpdate(request.dpcId())
                 .orElseThrow(() -> new DpcNotFoundException(request.dpcId()));
 
         String normalizedPhoneNumber = PhoneNumberNormalizer.normalize(request.phoneNumber());
-        boolean duplicate = callRecordRepository.existsByDpcIdAndPhoneNumberAndCallTimestampAndDurationSeconds(
-                request.dpcId(), normalizedPhoneNumber, request.callTimestamp(), request.durationSeconds());
+        boolean duplicate = callRecordRepository
+                .existsByDpcIdAndCallSourceAndPhoneNumberAndCallTimestampAndDurationSeconds(
+                        request.dpcId(), callSource, normalizedPhoneNumber,
+                        request.callTimestamp(), request.durationSeconds());
         List<Contact> matchingContacts = contactLookupService.findMatchesByPhoneNumber(normalizedPhoneNumber);
 
         Contact contact = matchingContacts.size() == 1 ? matchingContacts.getFirst() : null;
@@ -65,9 +81,11 @@ public class CallVerificationService {
                 normalizedPhoneNumber,
                 request.callTimestamp(),
                 request.durationSeconds(),
-                verificationStatus));
+                verificationStatus,
+                callSource,
+                callType));
 
-        if (contact != null && !duplicate) {
+        if (contact != null && !duplicate && callSource == CallSource.APP) {
             updateOutreachStatus(contact, callRecord, verificationStatus);
         }
 
@@ -103,7 +121,9 @@ public class CallVerificationService {
             unmatchedCall.setContact(contact);
             unmatchedCall.setVerificationStatus(status);
             callRecordRepository.save(unmatchedCall);
-            updateOutreachStatus(contact, unmatchedCall, status);
+            if (unmatchedCall.getCallSource() == CallSource.APP) {
+                updateOutreachStatus(contact, unmatchedCall, status);
+            }
         }
         return callRecord;
     }

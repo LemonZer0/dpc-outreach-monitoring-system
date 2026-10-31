@@ -92,8 +92,8 @@ public class AdminManagementController {
     }
 
     @DeleteMapping("/call-records/{callRecordId}")
-    public ResponseEntity<Void> deleteDuplicateCallRecord(@PathVariable Long callRecordId) {
-        adminManagementService.deleteDuplicateCallRecord(callRecordId);
+    public ResponseEntity<Void> deleteCallRecord(@PathVariable Long callRecordId) {
+        adminManagementService.deleteCallRecord(callRecordId);
         return ResponseEntity.noContent().build();
     }
 }

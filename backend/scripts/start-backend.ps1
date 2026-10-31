@@ -3,6 +3,8 @@ $ErrorActionPreference = "Stop"
 $backendDirectory = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $hadPreviousPassword = Test-Path Env:DB_PASSWORD
 $previousPassword = $env:DB_PASSWORD
+$hadPreviousJavaHome = Test-Path Env:JAVA_HOME
+$previousJavaHome = $env:JAVA_HOME
 $hadPreviousProfiles = Test-Path Env:SPRING_PROFILES_ACTIVE
 $previousProfiles = $env:SPRING_PROFILES_ACTIVE
 $hadPreviousDemoPhone = Test-Path Env:DEMO_CONTACT_PHONE
@@ -67,6 +69,50 @@ if ($enableDemoMode) {
 }
 
 try {
+    $javaHomes = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:JAVA_HOME)) {
+        $javaHomes += $env:JAVA_HOME
+    }
+
+    $javaCommand = Get-Command java -ErrorAction SilentlyContinue
+    if ($javaCommand -and $javaCommand.Source) {
+        $javaHomes += Split-Path (Split-Path $javaCommand.Source -Parent) -Parent
+    }
+
+    foreach ($javaRoot in @(
+            (Join-Path $env:ProgramFiles "Java"),
+            (Join-Path $env:ProgramFiles "Eclipse Adoptium"))) {
+        if (Test-Path $javaRoot) {
+            $javaHomes += Get-ChildItem $javaRoot -Directory -Filter "jdk*" |
+                Select-Object -ExpandProperty FullName
+        }
+    }
+
+    $availableJdks = foreach ($javaHome in ($javaHomes | Where-Object { $_ } | Select-Object -Unique)) {
+        $javaExecutable = Join-Path $javaHome "bin\java.exe"
+        if (-not (Test-Path $javaExecutable)) {
+            continue
+        }
+
+        $versionOutput = (& $env:ComSpec /d /c "`"$javaExecutable`" -version 2>&1" | Out-String)
+        if ($versionOutput -match '(?:version\s+"|openjdk\s+)(?<major>\d+)') {
+            $majorVersion = [int]$Matches.major
+            if ($majorVersion -ge 21) {
+                [PSCustomObject]@{
+                    Home = (Resolve-Path $javaHome).Path
+                    MajorVersion = $majorVersion
+                }
+            }
+        }
+    }
+
+    $compatibleJdk = $availableJdks | Sort-Object MajorVersion -Descending | Select-Object -First 1
+    if (-not $compatibleJdk) {
+        throw "Java 21 or newer is required, but no compatible JDK was found. Install JDK 21+ and set JAVA_HOME to its installation directory."
+    }
+    $env:JAVA_HOME = $compatibleJdk.Home
+    Write-Host "Using Java $($compatibleJdk.MajorVersion) from $env:JAVA_HOME"
+
     if ([string]::IsNullOrWhiteSpace($env:ADMIN_USERNAME)) {
         do {
             $env:ADMIN_USERNAME = (Read-Host "Admin username for contact/company write access").Trim()
@@ -159,6 +205,12 @@ try {
         $env:DB_PASSWORD = $previousPassword
     } else {
         Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    }
+
+    if ($hadPreviousJavaHome) {
+        $env:JAVA_HOME = $previousJavaHome
+    } else {
+        Remove-Item Env:JAVA_HOME -ErrorAction SilentlyContinue
     }
 
     if ($hadPreviousProfiles) {

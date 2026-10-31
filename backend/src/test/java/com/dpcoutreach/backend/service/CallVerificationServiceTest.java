@@ -3,6 +3,8 @@ package com.dpcoutreach.backend.service;
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
+import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
@@ -48,8 +50,42 @@ class CallVerificationServiceTest {
         assertEquals(VerificationStatus.MATCHED_CONNECTED, saved.getVerificationStatus());
         assertEquals(contact, saved.getContact());
         assertEquals(NORMALIZED_PHONE, saved.getPhoneNumber());
+        assertEquals(CallSource.APP, saved.getCallSource());
+        assertEquals(CallType.MANUAL_METADATA, saved.getCallType());
         verify(harness.callRecordRepository).save(saved);
         verify(harness.outreachStatusRepository).save(any(OutreachStatus.class));
+    }
+
+    @Test
+    void savesDialerCallWithAppSourceAndDialerType() {
+        TestHarness harness = new TestHarness(List.of(), false);
+        CallSubmissionRequest request = new CallSubmissionRequest(
+                DPC_ID, FORMATTED_PHONE, CALL_TIME, 20, CallType.DIALER);
+
+        CallRecord saved = harness.service.verifyAndSave(request);
+
+        assertEquals(CallSource.APP, saved.getCallSource());
+        assertEquals(CallType.DIALER, saved.getCallType());
+    }
+
+    @Test
+    void savesSimulationWithSeparateSourceAndNoAppType() {
+        TestHarness harness = new TestHarness(List.of(), false);
+
+        CallRecord saved = harness.service.verifyAndSaveSimulation(request(20));
+
+        assertEquals(CallSource.SIMULATION, saved.getCallSource());
+        assertNull(saved.getCallType());
+    }
+
+    @Test
+    void simulatedCallsDoNotUpdateRealOutreachStatus() {
+        TestHarness harness = new TestHarness(List.of(contact()), false);
+
+        CallRecord saved = harness.service.verifyAndSaveSimulation(request(90));
+
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL, saved.getVerificationStatus());
+        verify(harness.outreachStatusRepository, never()).save(any(OutreachStatus.class));
     }
 
     @Test
@@ -124,8 +160,9 @@ class CallVerificationServiceTest {
 
         harness.service.verifyAndSave(request(20));
 
-        verify(harness.callRecordRepository).existsByDpcIdAndPhoneNumberAndCallTimestampAndDurationSeconds(
-                DPC_ID, NORMALIZED_PHONE, CALL_TIME, 20);
+        verify(harness.callRecordRepository)
+                .existsByDpcIdAndCallSourceAndPhoneNumberAndCallTimestampAndDurationSeconds(
+                        DPC_ID, CallSource.APP, NORMALIZED_PHONE, CALL_TIME, 20);
     }
 
     @Test
@@ -233,8 +270,10 @@ class CallVerificationServiceTest {
         private TestHarness(List<Contact> contacts, boolean duplicate) {
             when(dpcRepository.findByIdForUpdate(DPC_ID)).thenReturn(Optional.of(new Dpc("Test DPC", "test")));
             when(contactRepository.findAllByNormalizedPhoneNumber(NORMALIZED_PHONE)).thenReturn(contacts);
-            when(callRecordRepository.existsByDpcIdAndPhoneNumberAndCallTimestampAndDurationSeconds(
-                    eq(DPC_ID), eq(NORMALIZED_PHONE), eq(CALL_TIME), anyInt())).thenReturn(duplicate);
+            when(callRecordRepository
+                    .existsByDpcIdAndCallSourceAndPhoneNumberAndCallTimestampAndDurationSeconds(
+                            eq(DPC_ID), any(CallSource.class), eq(NORMALIZED_PHONE), eq(CALL_TIME), anyInt()))
+                    .thenReturn(duplicate);
             when(callRecordRepository.save(any(CallRecord.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
             when(outreachStatusRepository.findByCompanyId(isNull())).thenReturn(Optional.empty());

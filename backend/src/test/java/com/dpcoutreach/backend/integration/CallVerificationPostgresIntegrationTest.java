@@ -243,6 +243,8 @@ class CallVerificationPostgresIntegrationTest {
     void adminRoutesRequireCredentialsWhileContactDirectoryRemainsPublic() throws Exception {
         mockMvc.perform(get("/api/admin/companies"))
                 .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/admin/simulation/call-records").param("dpcId", dpc.getId().toString()))
+                .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/admin/dpcs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Unauthorized DPC\"}"))
@@ -277,6 +279,49 @@ class CallVerificationPostgresIntegrationTest {
         createdAdminDpc = dpcRepository.findById(createdId).orElseThrow();
         assertEquals(name, createdAdminDpc.getName());
         assertNull(createdAdminDpc.getAccountInformation());
+    }
+
+    @Test
+    void dpcSimulationRequiresAdminCredentialsAndSubmitsCall() throws Exception {
+        CallRecord appCall = callVerificationService.verifyAndSave(request);
+        String callRequest = """
+                {
+                  "dpcId": %d,
+                  "phoneNumber": "%s",
+                  "callTimestamp": "%s",
+                  "durationSeconds": 42
+                }
+                """.formatted(dpc.getId(), request.phoneNumber(), Instant.now());
+
+        mockMvc.perform(post("/api/admin/simulation/call-records")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(callRequest))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/admin/simulation/call-records")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(callRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dpcId").value(dpc.getId()))
+                .andExpect(jsonPath("$.durationSeconds").value(42))
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"))
+                .andExpect(jsonPath("$.callSource").value("SIMULATION"))
+                .andExpect(jsonPath("$.callType").doesNotExist());
+
+        mockMvc.perform(get("/api/call-records").param("dpcId", dpc.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(appCall.getId()))
+                .andExpect(jsonPath("$[0].callSource").value("APP"))
+                .andExpect(jsonPath("$[0].callType").value("MANUAL_METADATA"));
+
+        mockMvc.perform(get("/api/admin/simulation/call-records")
+                        .header("Authorization", adminAuthorizationHeader())
+                        .param("dpcId", dpc.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].callSource").value("SIMULATION"))
+                .andExpect(jsonPath("$[0].id").value(org.hamcrest.Matchers.not(appCall.getId())));
     }
 
     @Test
@@ -452,12 +497,15 @@ class CallVerificationPostgresIntegrationTest {
     }
 
     @Test
-    void adminCanDeleteDuplicateCallButNotRegularCall() throws Exception {
+    void adminCanDeleteUnlinkedAndContactLinkedCalls() throws Exception {
         CallRecord duplicate = callRecordRepository.save(new CallRecord(
                 dpc, null, request.phoneNumber(), Instant.now(), 10, VerificationStatus.DUPLICATE_CALL));
-        CallRecord regularCall = callRecordRepository.save(new CallRecord(
+        CallRecord unmatchedCall = callRecordRepository.save(new CallRecord(
                 dpc, null, request.phoneNumber(), Instant.now().plusSeconds(1), 10,
                 VerificationStatus.UNMATCHED_NUMBER));
+        CallRecord linkedCall = callRecordRepository.save(new CallRecord(
+                dpc, contact, request.phoneNumber(), Instant.now().plusSeconds(2), 10,
+                VerificationStatus.MATCHED_CONNECTED));
 
         mockMvc.perform(delete("/api/admin/call-records/" + duplicate.getId()))
                 .andExpect(status().isUnauthorized());
@@ -468,10 +516,34 @@ class CallVerificationPostgresIntegrationTest {
                 .andExpect(status().isNoContent());
         assertTrue(callRecordRepository.findById(duplicate.getId()).isEmpty());
 
-        mockMvc.perform(delete("/api/admin/call-records/" + regularCall.getId())
+        mockMvc.perform(delete("/api/admin/call-records/" + unmatchedCall.getId())
                         .header("Authorization", adminAuthorizationHeader()))
-                .andExpect(status().isConflict());
-        assertTrue(callRecordRepository.findById(regularCall.getId()).isPresent());
+                .andExpect(status().isNoContent());
+        assertTrue(callRecordRepository.findById(unmatchedCall.getId()).isEmpty());
+
+        mockMvc.perform(delete("/api/admin/call-records/" + linkedCall.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+        assertTrue(callRecordRepository.findById(linkedCall.getId()).isEmpty());
+    }
+
+    @Test
+    void deletingLatestLinkedCallRecalculatesCallSummaryFromRemainingAppHistory() throws Exception {
+        CallRecord earlierCall = callVerificationService.verifyAndSave(new CallSubmissionRequest(
+                request.dpcId(),
+                request.phoneNumber(),
+                request.callTimestamp().minusSeconds(10),
+                request.durationSeconds()));
+        CallRecord latestCall = callVerificationService.verifyAndSave(request);
+        assertTrue(outreachStatusRepository.findByCompanyId(company.getId()).isPresent());
+
+        mockMvc.perform(delete("/api/admin/call-records/" + latestCall.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+
+        assertTrue(callRecordRepository.findById(latestCall.getId()).isEmpty());
+        OutreachStatus status = outreachStatusRepository.findByCompanyId(company.getId()).orElseThrow();
+        assertEquals(earlierCall.getId(), status.getLatestCallRecord().getId());
     }
 
     @Test

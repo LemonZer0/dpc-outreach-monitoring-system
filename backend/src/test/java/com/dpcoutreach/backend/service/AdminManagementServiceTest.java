@@ -1,6 +1,7 @@
 package com.dpcoutreach.backend.service;
 
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.CoreOutreachStatus;
@@ -19,8 +20,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -62,25 +61,51 @@ class AdminManagementServiceTest {
     }
 
     @Test
-    void deletesOnlyCallRecordsMarkedAsDuplicates() {
+    void deletesUnlinkedCallRecords() {
         CallRecord duplicate = new CallRecord(
                 null, null, "919876543210", Instant.now(), 10, VerificationStatus.DUPLICATE_CALL);
         when(callRecordRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(duplicate));
 
-        service.deleteDuplicateCallRecord(42L);
+        service.deleteCallRecord(42L);
 
         verify(callRecordRepository).delete(duplicate);
     }
 
     @Test
-    void rejectsDeletingCallRecordsThatAreNotDuplicates() {
-        CallRecord regularCall = new CallRecord(
-                null, null, "919876543210", Instant.now(), 10, VerificationStatus.UNMATCHED_NUMBER);
-        when(callRecordRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(regularCall));
+    void deletesLinkedCallAndRepointsLatestStatusToMostRecentRemainingAppCall() {
+        var company = mock(Company.class);
+        var contact = mock(Contact.class);
+        var callRecord = mock(CallRecord.class);
+        var latestCall = mock(CallRecord.class);
+        var replacementCall = mock(CallRecord.class);
+        var status = mock(OutreachStatus.class);
+        when(callRecordRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(callRecord));
+        when(callRecord.getContact()).thenReturn(contact);
+        when(callRecord.getId()).thenReturn(42L);
+        when(contact.getCompany()).thenReturn(company);
+        when(company.getId()).thenReturn(12L);
+        when(status.getCompany()).thenReturn(company);
+        when(outreachStatusRepository.findByLatestCallRecord_Id(42L)).thenReturn(Optional.of(status));
+        when(status.getLatestCallRecord()).thenReturn(latestCall);
+        when(latestCall.getId()).thenReturn(42L);
+        when(callRecordRepository
+                .findFirstByContact_Company_IdAndCallSourceAndVerificationStatusInAndIdNotOrderByCallTimestampDesc(
+                        12L,
+                        CallSource.APP,
+                        List.of(
+                                VerificationStatus.MATCHED_CONNECTED,
+                                VerificationStatus.MATCHED_LONG_CALL,
+                                VerificationStatus.MATCHED_NOT_CONNECTED),
+                        42L))
+                .thenReturn(Optional.of(replacementCall));
+        when(replacementCall.getVerificationStatus()).thenReturn(VerificationStatus.MATCHED_LONG_CALL);
 
-        assertThrows(AdminResourceConflictException.class, () -> service.deleteDuplicateCallRecord(42L));
+        service.deleteCallRecord(42L);
 
-        verify(callRecordRepository, never()).delete(regularCall);
+        verify(status).setLatestCallRecord(replacementCall);
+        verify(status).setStatus(VerificationStatus.MATCHED_LONG_CALL.name());
+        verify(outreachStatusRepository).saveAndFlush(status);
+        verify(callRecordRepository).delete(callRecord);
     }
 
     @Test

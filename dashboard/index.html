@@ -37,7 +37,7 @@
           </label>
           <button class="button button-primary" id="connect-button" type="submit">Continue</button>
         </form>
-        <p class="helper-text">Open this dashboard at <code>http://127.0.0.1:8000</code>; opening <code>index.html</code> directly is blocked by browser security.</p>
+        <p class="helper-text">Start the backend with <code>backend\scripts\start-backend.ps1</code>, then open <code>http://localhost:8080/</code>.</p>
         <p class="error-message" id="error-message" role="alert" hidden></p>
       </section>
 
@@ -55,6 +55,10 @@
             <strong>Sign in as Admin</strong>
             <span>Manage companies, contacts, and outreach decisions.</span>
           </button>
+          <button class="mode-option" id="simulation-mode-button" type="button">
+            <strong>Sign in for DPC Simulation</strong>
+            <span>Submit test call logs for an available DPC.</span>
+          </button>
         </div>
         <button class="button button-secondary change-backend-button" id="change-backend-button" type="button">Change backend URL</button>
         <form class="admin-signin" id="admin-signin-form" hidden>
@@ -69,7 +73,125 @@
           <button class="button button-primary" id="admin-signin-button" type="submit">Sign in as Admin</button>
           <p class="form-message" id="admin-signin-message" role="alert" hidden></p>
         </form>
+        <form class="admin-signin" id="simulation-signin-form" hidden>
+          <label>
+            Admin username
+            <input id="simulation-username" type="text" autocomplete="username" required>
+          </label>
+          <label>
+            Admin password
+            <input id="simulation-password" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="button button-primary" id="simulation-signin-button" type="submit">Sign in for DPC Simulation</button>
+          <p class="form-message error" id="simulation-signin-message" role="alert" hidden></p>
+        </form>
       </section>
+
+      <div id="simulation-dashboard" hidden>
+        <section class="panel dashboard-toolbar">
+          <div>
+            <p class="eyebrow">DPC SIMULATION</p>
+            <strong id="simulation-welcome">Signed in as Admin</strong>
+          </div>
+          <div class="dashboard-actions">
+            <button class="button button-secondary" id="simulation-refresh-button" type="button">Refresh directory</button>
+            <button class="button button-secondary" id="simulation-back-button" type="button">Sign out &amp; switch</button>
+          </div>
+        </section>
+        <div id="simulation-entry-view">
+        <section class="panel" aria-labelledby="simulation-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">CALL LOG TESTING</p>
+              <h2 id="simulation-heading">Add a simulated call log</h2>
+            </div>
+          </div>
+          <form class="admin-form simulation-form" id="simulation-form">
+            <label>
+              DPC (name — ID)
+              <select id="simulation-dpc" required>
+                <option value="">Loading DPC list…</option>
+              </select>
+            </label>
+            <label>
+              Phone number
+              <input id="simulation-phone" name="phoneNumber" type="tel" maxlength="40" required>
+            </label>
+            <label>
+              Call date and time
+              <input id="simulation-timestamp" name="callTimestamp" type="datetime-local" required>
+            </label>
+            <label>
+              Duration (seconds)
+              <input id="simulation-duration" name="durationSeconds" type="number" min="0" step="1" required>
+            </label>
+            <button class="button button-primary" id="simulation-submit-button" type="submit">Add call log</button>
+            <button class="button button-secondary" id="simulation-history-button" type="button">Check simulated-call dashboard</button>
+          </form>
+          <p class="form-message simulation-message" id="simulation-message" role="status" aria-live="polite"></p>
+        </section>
+        <section class="panel" aria-labelledby="simulation-contacts-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">CONTACT DIRECTORY</p>
+              <h2 id="simulation-contacts-heading">Available contacts</h2>
+            </div>
+            <span class="scope-note" id="simulation-contact-count"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Contact</th>
+                  <th scope="col">Phone number</th>
+                  <th scope="col">Company</th>
+                </tr>
+              </thead>
+              <tbody id="simulation-contacts-body">
+                <tr><td class="empty-state" colspan="3">Sign in to load contacts.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        </div>
+        <section class="panel simulation-history" id="simulation-call-history" hidden aria-labelledby="simulation-history-heading">
+          <div class="panel-heading section-heading">
+            <div>
+              <p class="eyebrow">SIMULATION ONLY</p>
+              <h2 id="simulation-history-heading">Simulated call logs</h2>
+            </div>
+            <div class="dashboard-actions">
+              <label class="dpc-picker">
+                Select DPC
+                <select id="simulation-log-dpc">
+                  <option value="">Select a DPC…</option>
+                </select>
+              </label>
+              <button class="button button-primary" id="simulation-history-refresh" type="button">Load logs</button>
+              <button class="button button-secondary" id="simulation-history-back" type="button">Back to simulation</button>
+            </div>
+          </div>
+          <p class="error-message simulation-history-error" id="simulation-history-error" role="alert" hidden></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Call time</th>
+                  <th scope="col">Phone</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Verification</th>
+                  <th scope="col">Record</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="simulation-calls-body">
+                <tr><td class="empty-state" colspan="6">Select a DPC to view its simulated call logs.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <footer>Simulation logs use the same verification rules but stay separate from app logs and company outreach status.</footer>
+      </div>
 
       <div id="normal-dashboard" hidden>
         <section class="panel dashboard-toolbar">
@@ -139,12 +261,13 @@
                 <th scope="col">Phone</th>
                 <th scope="col">Duration</th>
                 <th scope="col">Verification</th>
+                <th scope="col">Source / type</th>
                 <th scope="col">Record</th>
                 <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="calls-body">
-              <tr><td class="empty-state" colspan="7">Load the dashboard to see call activity.</td></tr>
+              <tr><td class="empty-state" colspan="8">Load the dashboard to see call activity.</td></tr>
             </tbody>
           </table>
         </div>

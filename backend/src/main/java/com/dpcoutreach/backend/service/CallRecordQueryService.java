@@ -1,6 +1,7 @@
 package com.dpcoutreach.backend.service;
 
 import com.dpcoutreach.backend.dto.CallRecordResponse;
+import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,8 +25,8 @@ public class CallRecordQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<CallRecordResponse> findAllByDpcId(Long dpcId) {
-        return callRecordRepository.findAllByDpcIdOrderByCallTimestampDesc(dpcId).stream()
+    public List<CallRecordResponse> findAllByDpcIdAndCallSource(Long dpcId, CallSource callSource) {
+        return callRecordRepository.findAllByDpcIdAndCallSourceOrderByCallTimestampDesc(dpcId, callSource).stream()
                 .map(CallRecordResponse::from)
                 .toList();
     }

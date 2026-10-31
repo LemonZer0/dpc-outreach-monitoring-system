@@ -104,26 +104,38 @@ dashboard selection; it does not expose account information.
 
 ## Dashboard
 
-Start the backend, then open a second PowerShell window at the repository
-root and serve the dashboard locally:
-
-```powershell
-py -m http.server 8000 --bind 127.0.0.1 --directory dashboard
-```
-
-Open `http://127.0.0.1:8000`, enter the backend URL, and press Enter or
-select **Continue**. Choose **Sign in** for the outreach dashboard, or
+Start the backend with `backend/scripts/start-backend.ps1`. The backend serves
+the dashboard and API from the same origin; open `http://localhost:8080/` after
+the startup message appears. No separate dashboard server is needed. Press
+Enter or select **Continue**. Choose
+**Sign in** for the outreach dashboard, or
 **Sign in as Admin** and enter the configured admin credentials for the
 management dashboard. The normal dashboard lets a user select a DPC by
 name and review its calls, latest call-verification results, and company
-outreach decisions.
+outreach decisions. An unmatched call can be matched from its row by entering
+a contact name and selecting a company; the system creates that contact and
+updates the call's verification status. If multiple contacts share a number,
+new calls are kept unmatched rather than assigned to the wrong person, so they
+can be manually matched from the dashboard.
+
+On connection, the dashboard checks both backend health and the DPC directory
+API. If health succeeds but an API request returns 404, the server is reachable
+but is likely an older or different backend; stop it and start the backend from
+this project before reconnecting.
 
 The admin dashboard lets CORE create, rename, and delete companies; create,
 edit, and delete contacts; create DPC entries; and set each company's
 manual decision to `Confirmed`, `Pending`, `Declined`, or `Not set`.
-Contact numbers are normalized by the backend. Deletes that conflict with
-existing call or outreach history are rejected and the backend error is shown. Call
-verification remains automatic and separate from the manual decision.
+Contact numbers are normalized by the backend. Deleting a contact or company
+requires re-entering the current admin password. Call records are retained and
+become unmatched when their contact is deleted; deleting a company also removes
+its contacts and outreach statuses. Call verification remains automatic and
+separate from the manual decision.
+Duplicate call records can be permanently deleted from the normal call log
+after confirming with admin credentials; other call records cannot be deleted
+through this action.
+The dashboard and command-line client both require password confirmation for
+deletes.
 Admin credentials are validated by the backend, held only in memory, and
 cleared on logout; they are not saved in browser storage. The backend
 permits dashboard requests only from the documented local origins; use
@@ -141,9 +153,7 @@ PowerShell window in `backend/` and run:
 ```
 
 The admin client prompts for the configured username and password and
-provides the same contact and company operations. Contacts with call
-history cannot be deleted, and companies cannot be deleted while they
-have contacts or outreach history.
+provides the same contact and company operations.
 
 Admin write and company-management routes require HTTP Basic credentials.
 These include `POST /api/admin/dpcs`; the `POST`, `PUT`, and `DELETE`

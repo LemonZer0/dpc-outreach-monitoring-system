@@ -1,12 +1,16 @@
 package com.dpcoutreach.backend.service;
 
+import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.OutreachStatus;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
+import com.dpcoutreach.backend.repository.CompanyRepository;
+import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
 import com.dpcoutreach.backend.repository.OutreachStatusRepository;
 import jakarta.transaction.Transactional;
@@ -20,16 +24,22 @@ import java.util.Optional;
 public class CallVerificationService {
 
     private final DpcRepository dpcRepository;
+    private final CompanyRepository companyRepository;
+    private final ContactRepository contactRepository;
     private final ContactLookupService contactLookupService;
     private final CallRecordRepository callRecordRepository;
     private final OutreachStatusRepository outreachStatusRepository;
 
     public CallVerificationService(
             DpcRepository dpcRepository,
+            CompanyRepository companyRepository,
+            ContactRepository contactRepository,
             ContactLookupService contactLookupService,
             CallRecordRepository callRecordRepository,
             OutreachStatusRepository outreachStatusRepository) {
         this.dpcRepository = dpcRepository;
+        this.companyRepository = companyRepository;
+        this.contactRepository = contactRepository;
         this.contactLookupService = contactLookupService;
         this.callRecordRepository = callRecordRepository;
         this.outreachStatusRepository = outreachStatusRepository;
@@ -45,9 +55,6 @@ public class CallVerificationService {
         boolean duplicate = callRecordRepository.existsByDpcIdAndPhoneNumberAndCallTimestampAndDurationSeconds(
                 request.dpcId(), normalizedPhoneNumber, request.callTimestamp(), request.durationSeconds());
         List<Contact> matchingContacts = contactLookupService.findMatchesByPhoneNumber(normalizedPhoneNumber);
-        if (matchingContacts.size() > 1 && !duplicate) {
-            throw new AmbiguousContactMatchException(normalizedPhoneNumber);
-        }
 
         Contact contact = matchingContacts.size() == 1 ? matchingContacts.getFirst() : null;
 
@@ -64,6 +71,40 @@ public class CallVerificationService {
             updateOutreachStatus(contact, callRecord, verificationStatus);
         }
 
+        return callRecord;
+    }
+
+    @Transactional
+    public CallRecord matchUnmatchedCall(Long callRecordId, CallRecordMatchRequest request) {
+        if (request == null || request.contactName() == null || request.contactName().isBlank()
+                || request.companyId() == null) {
+            throw new IllegalArgumentException("Contact name and company are required");
+        }
+
+        CallRecord callRecord = callRecordRepository.findByIdForUpdate(callRecordId)
+                .orElseThrow(() -> new CallRecordNotFoundException(callRecordId));
+        if (callRecord.getContact() != null
+                || callRecord.getVerificationStatus() == VerificationStatus.DUPLICATE_CALL) {
+            throw new CallRecordMatchConflictException(
+                    "Call record with id " + callRecordId + " is no longer eligible for manual matching");
+        }
+
+        Company company = companyRepository.findById(request.companyId())
+                .orElseThrow(() -> new AdminResourceNotFoundException("Company", request.companyId()));
+        String normalizedPhoneNumber = PhoneNumberNormalizer.normalize(callRecord.getPhoneNumber());
+        Contact contact = contactRepository.save(new Contact(
+                request.contactName().trim(), normalizedPhoneNumber, company));
+
+        List<CallRecord> unmatchedCalls = callRecordRepository
+                .findAllByPhoneNumberAndContactIsNullAndVerificationStatusNot(
+                        normalizedPhoneNumber, VerificationStatus.DUPLICATE_CALL);
+        for (CallRecord unmatchedCall : unmatchedCalls) {
+            VerificationStatus status = classify(contact, unmatchedCall.getDurationSeconds(), false);
+            unmatchedCall.setContact(contact);
+            unmatchedCall.setVerificationStatus(status);
+            callRecordRepository.save(unmatchedCall);
+            updateOutreachStatus(contact, unmatchedCall, status);
+        }
         return callRecord;
     }
 

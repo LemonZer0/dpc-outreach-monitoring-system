@@ -75,6 +75,10 @@ public class CallRecord {
         return contact;
     }
 
+    public void setContact(Contact contact) {
+        this.contact = contact;
+    }
+
     public String getPhoneNumber() {
         return phoneNumber;
     }

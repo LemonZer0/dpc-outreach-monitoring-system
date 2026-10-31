@@ -90,4 +90,10 @@ public class AdminManagementController {
         adminManagementService.deleteContact(contactId);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/call-records/{callRecordId}")
+    public ResponseEntity<Void> deleteDuplicateCallRecord(@PathVariable Long callRecordId) {
+        adminManagementService.deleteDuplicateCallRecord(callRecordId);
+        return ResponseEntity.noContent().build();
+    }
 }

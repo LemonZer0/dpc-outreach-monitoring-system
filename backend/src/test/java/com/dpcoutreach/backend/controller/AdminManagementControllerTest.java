@@ -20,6 +20,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -93,5 +94,13 @@ class AdminManagementControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\" \"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deletesDuplicateCallRecord() throws Exception {
+        mockMvc.perform(delete("/api/admin/call-records/42"))
+                .andExpect(status().isNoContent());
+
+        verify(adminManagementService).deleteDuplicateCallRecord(42L);
     }
 }

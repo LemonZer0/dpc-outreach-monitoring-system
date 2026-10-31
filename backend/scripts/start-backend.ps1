@@ -126,6 +126,7 @@ try {
                 Write-Host ""
                 Write-Host "============================================================" -ForegroundColor Green
                 Write-Host "  BACKEND STARTED SUCCESSFULLY" -ForegroundColor Green
+                Write-Host "  Dashboard: http://localhost:$serverPort/" -ForegroundColor Green
                 Write-Host "  API:    http://localhost:$serverPort" -ForegroundColor Green
                 Write-Host "  Health: http://localhost:$serverPort/api/health" -ForegroundColor Green
                 Write-Host "============================================================" -ForegroundColor Green

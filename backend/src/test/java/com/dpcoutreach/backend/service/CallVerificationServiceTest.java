@@ -1,6 +1,7 @@
 package com.dpcoutreach.backend.service;
 
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
+import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
@@ -8,6 +9,7 @@ import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.OutreachStatus;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
+import com.dpcoutreach.backend.repository.CompanyRepository;
 import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
 import com.dpcoutreach.backend.repository.OutreachStatusRepository;
@@ -104,12 +106,16 @@ class CallVerificationServiceTest {
     }
 
     @Test
-    void rejectsPhoneNumberMatchingMultipleContacts() {
+    void savesAmbiguousPhoneNumberAsUnmatchedForManualResolution() {
         Contact contact = contact();
         TestHarness harness = new TestHarness(List.of(contact, contact), false);
 
-        assertThrows(AmbiguousContactMatchException.class, () -> harness.service.verifyAndSave(request(20)));
-        verify(harness.callRecordRepository, never()).save(any(CallRecord.class));
+        CallRecord saved = harness.service.verifyAndSave(request(20));
+
+        assertNull(saved.getContact());
+        assertEquals(VerificationStatus.UNMATCHED_NUMBER, saved.getVerificationStatus());
+        verify(harness.callRecordRepository).save(saved);
+        verify(harness.outreachStatusRepository, never()).save(any(OutreachStatus.class));
     }
 
     @Test
@@ -167,6 +173,47 @@ class CallVerificationServiceTest {
         verify(harness.dpcRepository, never()).findByIdForUpdate(DPC_ID);
     }
 
+    @Test
+    void rematchesOrphanedCallsEvenWhenTheirOldVerificationStatusLooksMatched() {
+        Company company = mock(Company.class);
+        when(company.getId()).thenReturn(8L);
+        when(company.getName()).thenReturn("Example Company");
+        Contact existingContact = new Contact("Demo Luffy", NORMALIZED_PHONE, company);
+        TestHarness harness = new TestHarness(List.of(existingContact), false);
+        when(harness.companyRepository.findById(8L)).thenReturn(Optional.of(company));
+        CallRecord callRecord = new CallRecord(
+                new Dpc("Test DPC", "test"), null, NORMALIZED_PHONE, CALL_TIME, 70,
+                VerificationStatus.MATCHED_CONNECTED);
+        CallRecord earlierCall = new CallRecord(
+                new Dpc("Other DPC", "other"), null, NORMALIZED_PHONE, CALL_TIME.minusSeconds(60), 20,
+                VerificationStatus.UNMATCHED_NUMBER);
+        when(harness.callRecordRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(callRecord));
+        when(harness.callRecordRepository.findAllByPhoneNumberAndContactIsNullAndVerificationStatusNot(
+                NORMALIZED_PHONE, VerificationStatus.DUPLICATE_CALL))
+                .thenReturn(List.of(callRecord, earlierCall));
+        when(harness.contactRepository.save(any(Contact.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(harness.outreachStatusRepository.findByCompanyId(8L)).thenReturn(Optional.empty());
+
+        CallRecord matched = harness.service.matchUnmatchedCall(
+                42L, new CallRecordMatchRequest("New Contact", 8L));
+
+        assertEquals("New Contact", matched.getContact().getName());
+        org.junit.jupiter.api.Assertions.assertNotSame(existingContact, matched.getContact());
+        assertEquals(NORMALIZED_PHONE, matched.getContact().getPhoneNumber());
+        assertEquals(company, matched.getContact().getCompany());
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL, matched.getVerificationStatus());
+        org.mockito.ArgumentCaptor<Contact> contactCaptor = org.mockito.ArgumentCaptor.forClass(Contact.class);
+        verify(harness.contactRepository).save(contactCaptor.capture());
+        assertEquals("New Contact", contactCaptor.getValue().getName());
+        verify(harness.callRecordRepository).save(callRecord);
+        assertEquals(matched.getContact(), earlierCall.getContact());
+        assertEquals(VerificationStatus.MATCHED_CONNECTED, earlierCall.getVerificationStatus());
+        verify(harness.callRecordRepository).save(earlierCall);
+        verify(harness.outreachStatusRepository, org.mockito.Mockito.times(2))
+                .save(any(OutreachStatus.class));
+    }
+
     private static CallSubmissionRequest request(int durationSeconds) {
         return new CallSubmissionRequest(DPC_ID, FORMATTED_PHONE, CALL_TIME, durationSeconds);
     }
@@ -177,6 +224,7 @@ class CallVerificationServiceTest {
 
     private static class TestHarness {
         private final DpcRepository dpcRepository = mock(DpcRepository.class);
+        private final CompanyRepository companyRepository = mock(CompanyRepository.class);
         private final ContactRepository contactRepository = mock(ContactRepository.class);
         private final CallRecordRepository callRecordRepository = mock(CallRecordRepository.class);
         private final OutreachStatusRepository outreachStatusRepository = mock(OutreachStatusRepository.class);
@@ -195,7 +243,8 @@ class CallVerificationServiceTest {
 
             ContactLookupService contactLookupService = new ContactLookupService(contactRepository);
             service = new CallVerificationService(
-                    dpcRepository, contactLookupService, callRecordRepository, outreachStatusRepository);
+                    dpcRepository, companyRepository, contactRepository, contactLookupService,
+                    callRecordRepository, outreachStatusRepository);
         }
     }
 }

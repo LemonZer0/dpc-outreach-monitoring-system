@@ -13,7 +13,7 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
     @Query("SELECT c FROM Contact c JOIN FETCH c.company ORDER BY c.company.name, c.name")
     List<Contact> findAllWithCompanyOrderByCompanyNameAndName();
 
-    boolean existsByCompany_Id(Long companyId);
+    List<Contact> findAllByCompany_Id(Long companyId);
 
     @Query(value = "SELECT c.* FROM contacts c "
             + "WHERE regexp_replace(c.phone_number, '[^0-9]', '', 'g') = :normalizedPhoneNumber",

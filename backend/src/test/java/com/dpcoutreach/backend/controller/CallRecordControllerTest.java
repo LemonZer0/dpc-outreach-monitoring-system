@@ -1,13 +1,13 @@
 package com.dpcoutreach.backend.controller;
 
-import com.dpcoutreach.backend.dto.CallSubmissionRequest;
+import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.dto.CallRecordResponse;
+import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.VerificationStatus;
-import com.dpcoutreach.backend.service.AmbiguousContactMatchException;
 import com.dpcoutreach.backend.service.CallRecordNotFoundException;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
@@ -101,15 +101,22 @@ class CallRecordControllerTest {
     }
 
     @Test
-    void returnsConflictForAmbiguousContactMatch() throws Exception {
+    void savesUnmatchedCallForAmbiguousContactMatch() throws Exception {
         when(callVerificationService.verifyAndSave(any(CallSubmissionRequest.class)))
-                .thenThrow(new AmbiguousContactMatchException("919876543210"));
+                .thenReturn(new CallRecord(
+                        new Dpc("Example DPC", "account"),
+                        null,
+                        "919876543210",
+                        Instant.parse("2026-10-13T10:00:00Z"),
+                        35,
+                        VerificationStatus.UNMATCHED_NUMBER));
 
         mockMvc.perform(post("/api/call-records")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").exists());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contactId").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.verificationStatus").value("UNMATCHED_NUMBER"));
     }
 
     @Test
@@ -135,6 +142,37 @@ class CallRecordControllerTest {
                 .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
 
         verify(callRecordQueryService).findAllByDpcId(7L);
+    }
+
+    @Test
+    void matchesAnUnmatchedCallAndReturnsUpdatedRecord() throws Exception {
+        when(callVerificationService.matchUnmatchedCall(42L, new CallRecordMatchRequest("New Contact", 8L)))
+                .thenReturn(callRecord());
+
+        mockMvc.perform(post("/api/call-records/42/match")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"contactName":"New Contact","companyId":8}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
+
+        verify(callVerificationService).matchUnmatchedCall(
+                42L, new CallRecordMatchRequest("New Contact", 8L));
+    }
+
+    @Test
+    void rejectsMatchRequestsWithoutANameOrPositiveCompanyId() throws Exception {
+        mockMvc.perform(post("/api/call-records/42/match")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"contactName":" ","companyId":0}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").exists());
+
+        verify(callVerificationService, never()).matchUnmatchedCall(
+                42L, new CallRecordMatchRequest(" ", 0L));
     }
 
     @Test

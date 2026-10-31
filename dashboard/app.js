@@ -44,8 +44,24 @@ const contactPhoneInput = document.querySelector("#contact-phone");
 const contactCompanySelect = document.querySelector("#contact-company");
 const contactSaveButton = document.querySelector("#contact-save-button");
 const contactCancelButton = document.querySelector("#contact-cancel-button");
+const deleteConfirmDialog = document.querySelector("#delete-confirm-dialog");
+const deleteConfirmForm = document.querySelector("#delete-confirm-form");
+const deleteConfirmDescription = document.querySelector("#delete-confirm-description");
+const deleteConfirmUsernameField = document.querySelector("#delete-confirm-username-field");
+const deleteConfirmUsername = document.querySelector("#delete-confirm-username");
+const deleteConfirmPasswordLabel = document.querySelector("#delete-confirm-password-label");
+const deleteConfirmPassword = document.querySelector("#delete-confirm-password");
+const deleteConfirmError = document.querySelector("#delete-confirm-error");
+const deleteConfirmButton = document.querySelector("#delete-confirm-button");
 const statusFilter = document.querySelector("#status-filter");
 const searchFilter = document.querySelector("#search-filter");
+const callMatchDialog = document.querySelector("#call-match-dialog");
+const callMatchForm = document.querySelector("#call-match-form");
+const callMatchDescription = document.querySelector("#call-match-description");
+const callMatchName = document.querySelector("#call-match-name");
+const callMatchCompany = document.querySelector("#call-match-company");
+const callMatchError = document.querySelector("#call-match-error");
+const callMatchSubmit = document.querySelector("#call-match-submit");
 
 const state = {
   dpcs: [],
@@ -57,9 +73,16 @@ const state = {
   adminContacts: [],
   adminDpcs: [],
   adminOutreachStatuses: [],
+  pendingDelete: null,
+  pendingCallMatch: null,
+  callMatchSubmitting: false,
 };
 
-backendInput.value = localStorage.getItem("dpc-dashboard-backend-url") || backendInput.value;
+const servedByBackend = location.port === "8080" &&
+  ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+backendInput.value = servedByBackend
+  ? location.origin
+  : localStorage.getItem("dpc-dashboard-backend-url") || backendInput.value;
 
 connectForm.addEventListener("submit", connectToBackend);
 normalModeButton.addEventListener("click", openNormalDashboard);
@@ -109,10 +132,34 @@ dpcSelect.addEventListener("change", () => {
 });
 statusFilter.addEventListener("change", renderCalls);
 searchFilter.addEventListener("input", renderCalls);
+callsBody.addEventListener("click", handleCallAction);
+callMatchForm.addEventListener("submit", matchCall);
+document.querySelector("#call-match-cancel").addEventListener("click", closeCallMatchDialog);
+callMatchDialog.addEventListener("cancel", (event) => {
+  if (state.callMatchSubmitting) event.preventDefault();
+});
+callMatchDialog.addEventListener("close", () => {
+  if (!state.callMatchSubmitting) {
+    state.pendingCallMatch = null;
+    callMatchForm.reset();
+  }
+});
 companyForm.addEventListener("submit", saveCompany);
 companyCancelButton.addEventListener("click", resetCompanyForm);
 contactForm.addEventListener("submit", saveContact);
 contactCancelButton.addEventListener("click", resetContactForm);
+deleteConfirmForm.addEventListener("submit", confirmDelete);
+document.querySelector("#delete-cancel-button").addEventListener("click", closeDeleteConfirmation);
+deleteConfirmDialog.addEventListener("cancel", (event) => {
+  if (deleteConfirmButton.disabled) event.preventDefault();
+});
+deleteConfirmDialog.addEventListener("close", () => {
+  if (!deleteConfirmButton.disabled) {
+    state.pendingDelete = null;
+    deleteConfirmUsername.value = "";
+    deleteConfirmPassword.value = "";
+  }
+});
 adminCompaniesBody.addEventListener("click", handleCompanyAction);
 adminStatusesBody.addEventListener("change", updateCoreOutreachStatus);
 adminContactsBody.addEventListener("click", handleContactAction);
@@ -141,6 +188,11 @@ async function connectToBackend(event) {
   event.preventDefault();
   setError("");
 
+  if (location.protocol === "file:") {
+    setError("Open the dashboard from http://127.0.0.1:8000 instead of opening index.html directly. From the repository root, run: py -m http.server 8000 --bind 127.0.0.1 --directory dashboard");
+    return;
+  }
+
   let baseUrl;
   try {
     baseUrl = apiBaseUrl();
@@ -154,11 +206,18 @@ async function connectToBackend(event) {
   connectButton.textContent = "Connecting…";
   setConnection("Checking backend…", "loading");
   try {
-    const health = await getJson(baseUrl, "/api/health");
+    const [health, dpcs] = await Promise.all([
+      getJson(baseUrl, "/api/health", { timeoutMs: 8000 }),
+      getJson(baseUrl, "/api/dpcs", { timeoutMs: 8000 }),
+    ]);
     if (health.status !== "UP") {
       throw new Error("The backend health check did not report UP.");
     }
+    if (!Array.isArray(dpcs)) {
+      throw new Error("The backend is reachable but returned an unexpected DPC directory response.");
+    }
 
+    backendInput.value = baseUrl;
     localStorage.setItem("dpc-dashboard-backend-url", baseUrl);
     connectionPanel.hidden = true;
     modePanel.hidden = false;
@@ -166,7 +225,10 @@ async function connectToBackend(event) {
     pageSubtitle.textContent = "Choose the dashboard that matches your role.";
   } catch (error) {
     setConnection("Connection failed");
-    setError(`${error.message || "Could not connect to the backend."} Check the URL and try again.`);
+    const guidance = error instanceof TypeError
+      ? " Check that the backend URL is correct and that the backend is running. If the dashboard is served separately, its origin must be allowed by the backend."
+      : "";
+    setError(`${error.message || "Could not connect to the backend."}${guidance}`);
   } finally {
     connectButton.disabled = false;
     connectButton.textContent = "Continue";
@@ -186,7 +248,7 @@ async function openNormalDashboard() {
   await loadDpcs();
 }
 
-function returnToModeChoice() {
+async function returnToModeChoice() {
   state.adminCredentials = null;
   normalDashboard.hidden = true;
   adminDashboard.hidden = true;
@@ -199,8 +261,24 @@ function returnToModeChoice() {
   resetCompanyForm();
   resetContactForm();
   pageTitle.textContent = "DPC Outreach Monitor";
-  pageSubtitle.textContent = "Choose the dashboard that matches your role.";
-  setConnection("Backend connected", "connected");
+  pageSubtitle.textContent = "Checking backend connection…";
+  setConnection("Checking backend…", "loading");
+  try {
+    const baseUrl = apiBaseUrl();
+    const [health, dpcs] = await Promise.all([
+      getJson(baseUrl, "/api/health", { timeoutMs: 8000 }),
+      getJson(baseUrl, "/api/dpcs", { timeoutMs: 8000 }),
+    ]);
+    if (health.status !== "UP" || !Array.isArray(dpcs)) {
+      throw new Error("Backend health or DPC directory check failed.");
+    }
+    pageSubtitle.textContent = "Choose the dashboard that matches your role.";
+    setConnection("Backend connected", "connected");
+  } catch (error) {
+    pageSubtitle.textContent =
+      `The backend is not reachable (${error.message || "connection check failed"}). Start it or change the backend URL to continue.`;
+    setConnection("Backend disconnected");
+  }
 }
 
 function clearDpcSelection() {
@@ -218,16 +296,31 @@ function apiBaseUrl() {
   if (!["http:", "https:"].includes(parsedUrl.protocol)) {
     throw new Error("Backend URL must use HTTP or HTTPS.");
   }
+  if (parsedUrl.hostname === "localhost" && parsedUrl.origin !== location.origin) {
+    parsedUrl.hostname = "127.0.0.1";
+  }
   return parsedUrl.toString().replace(/\/+$/, "");
 }
 
-async function getJson(baseUrl, path) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: { Accept: "application/json" },
-  });
+async function getJson(baseUrl, path, { timeoutMs = 15000 } = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Backend request timed out after ${Math.ceil(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!response.ok) {
-    const details = await response.text();
-    throw new Error(`Backend returned HTTP ${response.status}${details ? `: ${details}` : ""}`);
+    throw new Error(await responseError(response, path));
   }
   return response.json();
 }
@@ -275,7 +368,7 @@ async function loadDashboard() {
     setConnection("Backend connected", "connected");
   } catch (error) {
     setConnection("Connection failed");
-    setNormalError(`${error.message || "Could not load dashboard data."} Check that the backend is running and try again.`);
+    setNormalError(error.message || "Could not load dashboard data.");
   } finally {
     refreshButton.textContent = "Refresh dashboard";
     refreshButton.disabled = !dpcSelect.value;
@@ -332,7 +425,7 @@ async function loadDpcs() {
   } catch (error) {
     setConnection("Connection failed");
     dpcSelect.replaceChildren(new Option("DPC list unavailable", ""));
-    setNormalError(`${error.message || "Could not load the DPC directory."} Check that the backend is running and try again.`);
+    setNormalError(error.message || "Could not load the DPC directory.");
   } finally {
     loadDpcsButton.disabled = false;
     loadDpcsButton.textContent = state.dpcs.length ? "Refresh DPC list" : "Load DPC list";
@@ -347,7 +440,7 @@ function renderDashboard() {
     String(state.calls.filter((call) => call.verificationStatus === "MATCHED_LONG_CALL").length);
   document.querySelector("#metric-companies").textContent = String(state.companies.length);
 
-  const statuses = [...new Set(state.calls.map((call) => call.verificationStatus))].sort();
+  const statuses = [...new Set(state.calls.map(displayedVerificationStatus))].sort();
   statusFilter.replaceChildren(new Option("All statuses", ""));
   for (const status of statuses) {
     statusFilter.add(new Option(status.replaceAll("_", " "), status));
@@ -366,13 +459,13 @@ function renderCalls() {
     const contact = state.contacts.get(call.contactId);
     const company = contact?.companyName || "";
     const searchable = `${call.phoneNumber} ${company} ${contact?.name || ""} ${call.id}`.toLocaleLowerCase();
-    return (!selectedStatus || call.verificationStatus === selectedStatus) &&
+    return (!selectedStatus || displayedVerificationStatus(call) === selectedStatus) &&
       (!query || searchable.includes(query));
   }).slice(0, 100);
 
   callsBody.replaceChildren();
   if (filteredCalls.length === 0) {
-    addEmptyRow(callsBody, "No call records match this DPC and filter.", 6);
+    addEmptyRow(callsBody, "No call records match this DPC and filter.", 7);
     return;
   }
 
@@ -390,10 +483,123 @@ function renderCalls() {
       contactCell,
       makeCell(call.phoneNumber),
       makeCell(formatDuration(call.durationSeconds)),
-      makeBadgeCell(call.verificationStatus),
+      makeBadgeCell(displayedVerificationStatus(call)),
       makeCell(`#${call.id}`),
     );
+    const actions = document.createElement("td");
+    if (displayedVerificationStatus(call) === "UNMATCHED_NUMBER") {
+      const matchButton = document.createElement("button");
+      matchButton.type = "button";
+      matchButton.className = "button button-small button-secondary";
+      matchButton.dataset.action = "match-call";
+      matchButton.dataset.id = String(call.id);
+      matchButton.textContent = "Match to company";
+      actions.append(matchButton);
+    } else if (call.verificationStatus === "DUPLICATE_CALL") {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "button button-small button-danger";
+      deleteButton.dataset.action = "delete-duplicate-call";
+      deleteButton.dataset.id = String(call.id);
+      deleteButton.textContent = "Delete duplicate";
+      actions.append(deleteButton);
+    } else {
+      actions.textContent = "—";
+    }
+    row.append(actions);
     callsBody.append(row);
+  }
+}
+
+function displayedVerificationStatus(call) {
+  return call.contactId === null && call.verificationStatus !== "DUPLICATE_CALL"
+    ? "UNMATCHED_NUMBER"
+    : call.verificationStatus;
+}
+
+function handleCallAction(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const call = state.calls.find((item) => item.id === Number(button.dataset.id));
+  if (button.dataset.action === "delete-duplicate-call") {
+    if (!call || call.verificationStatus !== "DUPLICATE_CALL") return;
+    openDeleteConfirmation({
+      kind: "duplicate-call",
+      id: call.id,
+      description: `Permanently delete duplicate call record #${call.id} (${call.phoneNumber})? This cannot be undone.`,
+    });
+    return;
+  }
+  if (button.dataset.action !== "match-call") return;
+  if (!call || displayedVerificationStatus(call) !== "UNMATCHED_NUMBER") return;
+
+  state.pendingCallMatch = call;
+  const existingContacts = [...state.contacts.values()].filter(
+    (contact) => contact.phoneNumber.replace(/\D/g, "") === call.phoneNumber.replace(/\D/g, ""),
+  );
+  const existingContactNote = existingContacts.length
+    ? ` A contact with this number already exists: ${existingContacts.map((contact) => `${contact.name} (${contact.companyName})`).join(", ")}. A separate contact will be created for the name you enter; future calls from this number will remain unmatched for manual assignment.`
+    : "";
+  callMatchDescription.textContent =
+    `Create a new contact for ${call.phoneNumber} and associate this call with the selected company.${existingContactNote}`;
+  callMatchCompany.replaceChildren(new Option("Choose a company", ""));
+  for (const company of state.companies) {
+    callMatchCompany.add(new Option(company.companyName, String(company.companyId)));
+  }
+  if (state.companies.length === 0) {
+    callMatchCompany.add(new Option("No companies are registered", ""));
+  }
+  callMatchError.hidden = true;
+  callMatchError.textContent = "";
+  callMatchSubmit.disabled = state.companies.length === 0;
+  if (state.companies.length === 0) {
+    callMatchError.textContent = "There are no companies to choose from. Ask an admin to add a company first.";
+    callMatchError.hidden = false;
+  }
+  callMatchDialog.showModal();
+  callMatchName.focus();
+}
+
+function closeCallMatchDialog() {
+  if (state.callMatchSubmitting) return;
+  callMatchDialog.close();
+  state.pendingCallMatch = null;
+  callMatchForm.reset();
+}
+
+async function matchCall(event) {
+  event.preventDefault();
+  const call = state.pendingCallMatch;
+  const contactName = callMatchName.value.trim();
+  const companyId = Number(callMatchCompany.value);
+  if (!call || !contactName || !Number.isSafeInteger(companyId) || companyId < 1) return;
+
+  callMatchSubmit.disabled = true;
+  state.callMatchSubmitting = true;
+  callMatchError.hidden = true;
+  try {
+    const baseUrl = apiBaseUrl();
+    const response = await fetch(`${baseUrl}/api/call-records/${call.id}/match`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ contactName, companyId }),
+    });
+    if (!response.ok) {
+      throw new Error(await responseError(response, `/api/call-records/${call.id}/match`));
+    }
+    callMatchDialog.close();
+    state.pendingCallMatch = null;
+    callMatchForm.reset();
+    await loadDashboard();
+  } catch (error) {
+    callMatchError.textContent = error.message || "Could not match this call.";
+    callMatchError.hidden = false;
+  } finally {
+    state.callMatchSubmitting = false;
+    callMatchSubmit.disabled = state.companies.length === 0;
   }
 }
 
@@ -452,8 +658,7 @@ async function loginAdmin(event) {
       throw new Error("Admin sign-in failed. Check the username and password.");
     }
     if (!response.ok) {
-      const details = await response.text();
-      throw new Error(`Could not verify admin access (HTTP ${response.status}${details ? `: ${details}` : ""}).`);
+      throw new Error(`Could not verify admin access (${await responseError(response, "/api/admin/companies")}).`);
     }
     const companies = await response.json();
     if (!Array.isArray(companies)) {
@@ -510,18 +715,17 @@ async function loadAdminData() {
     state.adminDpcs = dpcs;
     renderAdminDashboard();
     showAdminMessage("Admin data is up to date.");
+    return true;
   } catch (error) {
     showAdminMessage(error.message || "Could not load admin data.", true);
+    return false;
   } finally {
     refreshButton.disabled = false;
     refreshButton.textContent = "Refresh data";
   }
 }
 
-async function requestAdmin(path, options = {}) {
-  if (!state.adminCredentials) {
-    throw new Error("Sign in as Admin to continue.");
-  }
+async function requestAdminWithCredentials(path, options, username, password) {
   const baseUrl = apiBaseUrl();
   ensureSecureAdminConnection(baseUrl);
   const response = await fetch(`${baseUrl}${path}`, {
@@ -529,14 +733,44 @@ async function requestAdmin(path, options = {}) {
     headers: {
       Accept: "application/json",
       ...(options.body ? { "Content-Type": "application/json" } : {}),
+      Authorization: basicAuthorization(username, password),
+      ...options.headers,
+    },
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Admin sign-in failed. Check the username and password.");
+  }
+  if (!response.ok) {
+    throw new Error(await responseError(response, path));
+  }
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function requestAdmin(path, options = {}, passwordConfirmation = null) {
+  if (!state.adminCredentials) {
+    throw new Error("Sign in as Admin to continue.");
+  }
+  const baseUrl = apiBaseUrl();
+  ensureSecureAdminConnection(baseUrl);
+  const credentials = state.adminCredentials;
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
       Authorization: basicAuthorization(
-        state.adminCredentials.username,
-        state.adminCredentials.password,
+        credentials.username,
+        passwordConfirmation === null ? credentials.password : passwordConfirmation,
       ),
       ...options.headers,
     },
   });
   if (response.status === 401 || response.status === 403) {
+    if (passwordConfirmation !== null) {
+      throw new Error("The admin password was not accepted. Check it and try again.");
+    }
     state.adminCredentials = null;
     returnToModeChoice();
     adminSigninForm.hidden = false;
@@ -545,7 +779,7 @@ async function requestAdmin(path, options = {}) {
   }
   try {
     if (!response.ok) {
-      throw new Error(await responseError(response));
+      throw new Error(await responseError(response, path));
     }
     if (response.status === 204) return null;
     const text = await response.text();
@@ -558,17 +792,22 @@ async function requestAdmin(path, options = {}) {
   }
 }
 
-async function responseError(response) {
+async function responseError(response, path) {
   const text = await response.text();
+  let detail = "";
   if (text) {
     try {
       const body = JSON.parse(text);
-      const detail = body.detail || body.message || body.title;
-      if (detail) return `Backend returned HTTP ${response.status}: ${detail}`;
+      detail = body.detail || body.message || body.title || "";
     } catch (error) {
       if (!(error instanceof SyntaxError)) throw error;
     }
   }
+  if (response.status === 404 && path?.startsWith("/api/")) {
+    const endpoint = path.split("?")[0];
+    return `Backend returned HTTP 404 for ${endpoint}. The backend is reachable, but this API endpoint is unavailable. The dashboard may be connected to an older or different backend; stop the old backend and start this project's backend, then reconnect.${detail ? ` Server response: ${detail}` : ""}`;
+  }
+  if (detail) return `Backend returned HTTP ${response.status}: ${detail}`;
   return `Backend returned HTTP ${response.status}${text ? `: ${text}` : ""}`;
 }
 
@@ -762,15 +1001,13 @@ async function handleCompanyAction(event) {
     companyNameInput.focus();
     return;
   }
-  if (button.dataset.action === "delete-company" &&
-      confirm(`Delete ${company.name}? Companies with contacts or outreach history cannot be deleted.`)) {
-    try {
-      await requestAdmin(`/api/admin/companies/${id}`, { method: "DELETE" });
-      await loadAdminData();
-      showAdminMessage("Company deleted.");
-    } catch (error) {
-      showAdminMessage(error.message || "Could not delete company.", true);
-    }
+  if (button.dataset.action === "delete-company") {
+    openDeleteConfirmation({
+      kind: "company",
+      id,
+      name: company.name,
+      description: `Delete ${company.name} and all of its contacts? Call history will be kept as unmatched records. Its outreach statuses will also be removed.`,
+    });
   }
 }
 
@@ -790,15 +1027,88 @@ async function handleContactAction(event) {
     contactNameInput.focus();
     return;
   }
-  if (button.dataset.action === "delete-contact" &&
-      confirm(`Delete ${contact.name}? Contacts with call history cannot be deleted.`)) {
-    try {
-      await requestAdmin(`/api/admin/contacts/${id}`, { method: "DELETE" });
-      await loadAdminData();
-      showAdminMessage("Contact deleted.");
-    } catch (error) {
-      showAdminMessage(error.message || "Could not delete contact.", true);
+  if (button.dataset.action === "delete-contact") {
+    openDeleteConfirmation({
+      kind: "contact",
+      id,
+      name: contact.name,
+      description: `Delete ${contact.name}? Their call history will be kept as unmatched records.`,
+    });
+  }
+}
+
+function openDeleteConfirmation(deletion) {
+  state.pendingDelete = deletion;
+  deleteConfirmDescription.textContent = deletion.description;
+  const needsAdminCredentials = deletion.kind === "duplicate-call";
+  deleteConfirmUsernameField.hidden = !needsAdminCredentials;
+  deleteConfirmUsername.required = needsAdminCredentials;
+  deleteConfirmUsername.value = "";
+  deleteConfirmPasswordLabel.textContent = needsAdminCredentials
+    ? "Admin password"
+    : "Enter your current admin password";
+  deleteConfirmPassword.value = "";
+  deleteConfirmError.hidden = true;
+  deleteConfirmError.textContent = "";
+  deleteConfirmButton.disabled = false;
+  deleteConfirmDialog.showModal();
+  (needsAdminCredentials ? deleteConfirmUsername : deleteConfirmPassword).focus();
+}
+
+function closeDeleteConfirmation() {
+  if (deleteConfirmButton.disabled) return;
+  deleteConfirmDialog.close();
+  state.pendingDelete = null;
+  deleteConfirmUsername.value = "";
+  deleteConfirmPassword.value = "";
+}
+
+async function confirmDelete(event) {
+  event.preventDefault();
+  const deletion = state.pendingDelete;
+  const username = deleteConfirmUsername.value.trim();
+  const password = deleteConfirmPassword.value;
+  if (!deletion || !password || (deletion.kind === "duplicate-call" && !username)) return;
+
+  deleteConfirmButton.disabled = true;
+  deleteConfirmError.hidden = true;
+  try {
+    if (deletion.kind === "duplicate-call") {
+      await requestAdminWithCredentials(
+        `/api/admin/call-records/${deletion.id}`,
+        { method: "DELETE" },
+        username,
+        password,
+      );
+      deleteConfirmDialog.close();
+      state.pendingDelete = null;
+      deleteConfirmUsername.value = "";
+      deleteConfirmPassword.value = "";
+      await loadDashboard();
+      return;
     }
+
+    const resource = deletion.kind === "company" ? "companies" : "contacts";
+    await requestAdmin(`/api/admin/${resource}/${deletion.id}`, { method: "DELETE" }, password);
+    deleteConfirmDialog.close();
+    state.pendingDelete = null;
+    deleteConfirmUsername.value = "";
+    deleteConfirmPassword.value = "";
+    const refreshed = await loadAdminData();
+    const resourceName = deletion.kind === "company" ? "Company" : "Contact";
+    showAdminMessage(
+      refreshed
+        ? `${resourceName} deleted. Call history was preserved as unmatched.`
+        : `${resourceName} deleted, but the dashboard could not refresh its data.`,
+      !refreshed,
+    );
+  } catch (error) {
+    deleteConfirmError.textContent = error.message || "Could not delete this record.";
+    deleteConfirmError.hidden = false;
+    deleteConfirmPassword.value = "";
+    deleteConfirmPassword.focus();
+  } finally {
+    deleteConfirmButton.disabled = false;
   }
 }
 

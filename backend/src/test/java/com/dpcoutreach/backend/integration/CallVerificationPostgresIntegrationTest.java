@@ -122,7 +122,7 @@ class CallVerificationPostgresIntegrationTest {
                     .forEach(callRecordRepository::delete);
         }
         if (contact != null) {
-            contactRepository.delete(contact);
+            contactRepository.findAllByCompany_Id(company.getId()).forEach(contactRepository::delete);
         }
         if (company != null) {
             companyRepository.delete(company);
@@ -294,7 +294,8 @@ class CallVerificationPostgresIntegrationTest {
     void localDashboardCanPreflightAdminDirectoryChanges() throws Exception {
         for (var route : List.of(
                 Map.entry("/api/admin/dpcs", "POST"),
-                Map.entry("/api/admin/companies", "DELETE"))) {
+                Map.entry("/api/admin/companies", "DELETE"),
+                Map.entry("/api/admin/call-records/42", "DELETE"))) {
             mockMvc.perform(options(route.getKey())
                             .header("Origin", "http://localhost:8000")
                             .header("Access-Control-Request-Method", route.getValue())
@@ -388,10 +389,6 @@ class CallVerificationPostgresIntegrationTest {
                 .getContentAsString();
         long contactId = objectMapper.readTree(contactResponse).get("id").asLong();
 
-        mockMvc.perform(delete("/api/admin/companies/" + companyId)
-                        .header("Authorization", adminAuthorizationHeader()))
-                .andExpect(status().isConflict());
-
         mockMvc.perform(put("/api/admin/companies/" + companyId)
                         .header("Authorization", adminAuthorizationHeader())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -422,14 +419,129 @@ class CallVerificationPostgresIntegrationTest {
     }
 
     @Test
-    void adminCannotDeleteContactWithCallHistory() throws Exception {
-        callVerificationService.verifyAndSave(request);
+    void adminCanDeleteContactWithCallHistoryAndKeepTheCallRecord() throws Exception {
+        CallRecord savedCall = callVerificationService.verifyAndSave(request);
 
         mockMvc.perform(delete("/api/admin/contacts/" + contact.getId())
                         .header("Authorization", adminAuthorizationHeader()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message").value(
-                        "Contact with id " + contact.getId() + " cannot be deleted because it has call history"));
+                .andExpect(status().isNoContent());
+
+        assertTrue(contactRepository.findById(contact.getId()).isEmpty());
+        CallRecord preservedCall = callRecordRepository.findById(savedCall.getId()).orElseThrow();
+        assertNull(preservedCall.getContact());
+        assertEquals(VerificationStatus.UNMATCHED_NUMBER, preservedCall.getVerificationStatus());
+    }
+
+    @Test
+    void adminCanDeleteCompanyWithContactsAndHistoryAndKeepTheCallRecord() throws Exception {
+        CallRecord savedCall = callVerificationService.verifyAndSave(request);
+        coreOutreachStatusRepository.save(new CoreOutreachStatus(
+                company, CoreOutreachStatusValue.PENDING, Instant.now()));
+
+        mockMvc.perform(delete("/api/admin/companies/" + company.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+
+        assertTrue(companyRepository.findById(company.getId()).isEmpty());
+        assertTrue(contactRepository.findById(contact.getId()).isEmpty());
+        assertTrue(outreachStatusRepository.findByCompanyId(company.getId()).isEmpty());
+        assertTrue(coreOutreachStatusRepository.findByCompanyId(company.getId()).isEmpty());
+        CallRecord preservedCall = callRecordRepository.findById(savedCall.getId()).orElseThrow();
+        assertNull(preservedCall.getContact());
+        assertEquals(VerificationStatus.UNMATCHED_NUMBER, preservedCall.getVerificationStatus());
+    }
+
+    @Test
+    void adminCanDeleteDuplicateCallButNotRegularCall() throws Exception {
+        CallRecord duplicate = callRecordRepository.save(new CallRecord(
+                dpc, null, request.phoneNumber(), Instant.now(), 10, VerificationStatus.DUPLICATE_CALL));
+        CallRecord regularCall = callRecordRepository.save(new CallRecord(
+                dpc, null, request.phoneNumber(), Instant.now().plusSeconds(1), 10,
+                VerificationStatus.UNMATCHED_NUMBER));
+
+        mockMvc.perform(delete("/api/admin/call-records/" + duplicate.getId()))
+                .andExpect(status().isUnauthorized());
+        assertTrue(callRecordRepository.findById(duplicate.getId()).isPresent());
+
+        mockMvc.perform(delete("/api/admin/call-records/" + duplicate.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isNoContent());
+        assertTrue(callRecordRepository.findById(duplicate.getId()).isEmpty());
+
+        mockMvc.perform(delete("/api/admin/call-records/" + regularCall.getId())
+                        .header("Authorization", adminAuthorizationHeader()))
+                .andExpect(status().isConflict());
+        assertTrue(callRecordRepository.findById(regularCall.getId()).isPresent());
+    }
+
+    @Test
+    void rematchesOrphanedCallWithLegacyMatchedStatusAndCreatesContactForSelectedCompany() throws Exception {
+        String unmatchedPhone = "+91 7" + String.format("%09d", ThreadLocalRandom.current().nextLong(1_000_000_000L));
+        String callResponse = mockMvc.perform(post("/api/call-records")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dpcId": %d,
+                                  "phoneNumber": "%s",
+                                  "callTimestamp": "%s",
+                                  "durationSeconds": 75
+                                }
+                                """.formatted(dpc.getId(), unmatchedPhone, Instant.now())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contactId").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.verificationStatus").value("UNMATCHED_NUMBER"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long callId = objectMapper.readTree(callResponse).get("id").asLong();
+        CallRecord orphanedCall = callRecordRepository.findById(callId).orElseThrow();
+        orphanedCall.setVerificationStatus(VerificationStatus.MATCHED_CONNECTED);
+        callRecordRepository.saveAndFlush(orphanedCall);
+        Instant earlierCallTime = Instant.now().minusSeconds(10);
+        String earlierCallResponse = mockMvc.perform(post("/api/call-records")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dpcId": %d,
+                                  "phoneNumber": "%s",
+                                  "callTimestamp": "%s",
+                                  "durationSeconds": 25
+                                }
+                                """.formatted(dpc.getId(), unmatchedPhone, earlierCallTime)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.verificationStatus").value("UNMATCHED_NUMBER"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long earlierCallId = objectMapper.readTree(earlierCallResponse).get("id").asLong();
+        Contact existingContact = contactRepository.save(
+                new Contact("Existing contact with same number", unmatchedPhone, company));
+
+        String matchResponse = mockMvc.perform(post("/api/call-records/" + callId + "/match")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"contactName":"Manually matched contact","companyId":%d}
+                                """.formatted(company.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_LONG_CALL"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long contactId = objectMapper.readTree(matchResponse).get("contactId").asLong();
+
+        Contact matchedContact = contactRepository.findById(contactId).orElseThrow();
+        assertEquals("Manually matched contact", matchedContact.getName());
+        assertTrue(!matchedContact.getId().equals(existingContact.getId()));
+        assertEquals(company.getId(), matchedContact.getCompany().getId());
+        assertEquals(unmatchedPhone.replaceAll("[^0-9]", ""), matchedContact.getPhoneNumber());
+        CallRecord matchedCall = callRecordRepository.findById(callId).orElseThrow();
+        assertEquals(contactId, matchedCall.getContact().getId());
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL, matchedCall.getVerificationStatus());
+        CallRecord earlierMatchedCall = callRecordRepository.findById(earlierCallId).orElseThrow();
+        assertEquals(contactId, earlierMatchedCall.getContact().getId());
+        assertEquals(VerificationStatus.MATCHED_CONNECTED, earlierMatchedCall.getVerificationStatus());
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL.name(),
+                outreachStatusRepository.findByCompanyId(company.getId()).orElseThrow().getStatus());
     }
 
     @Test

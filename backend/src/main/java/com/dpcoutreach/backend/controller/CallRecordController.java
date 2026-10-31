@@ -2,6 +2,7 @@ package com.dpcoutreach.backend.controller;
 
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.dto.CallRecordResponse;
+import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
@@ -41,6 +42,13 @@ public class CallRecordController {
     @GetMapping
     public List<CallRecordResponse> getCallRecords(@RequestParam Long dpcId) {
         return callRecordQueryService.findAllByDpcId(dpcId);
+    }
+
+    @PostMapping("/{id}/match")
+    public CallRecordResponse matchUnmatchedCall(
+            @PathVariable Long id,
+            @Valid @RequestBody CallRecordMatchRequest request) {
+        return CallRecordResponse.from(callVerificationService.matchUnmatchedCall(id, request));
     }
 
     @GetMapping("/{id}")

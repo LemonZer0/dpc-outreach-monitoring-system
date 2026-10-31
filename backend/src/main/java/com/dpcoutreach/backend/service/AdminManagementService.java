@@ -6,9 +6,11 @@ import com.dpcoutreach.backend.dto.ContactResponse;
 import com.dpcoutreach.backend.dto.ContactWriteRequest;
 import com.dpcoutreach.backend.dto.DpcResponse;
 import com.dpcoutreach.backend.dto.DpcWriteRequest;
+import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.Dpc;
+import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
 import com.dpcoutreach.backend.repository.CompanyRepository;
 import com.dpcoutreach.backend.repository.CoreOutreachStatusRepository;
@@ -73,18 +75,14 @@ public class AdminManagementService {
     @Transactional
     public void deleteCompany(Long companyId) {
         Company company = findCompany(companyId);
-        if (contactRepository.existsByCompany_Id(companyId)) {
-            throw new AdminResourceConflictException(
-                    "Company with id " + companyId + " cannot be deleted while it has contacts");
+        List<Contact> contacts = contactRepository.findAllByCompany_Id(companyId);
+        for (Contact contact : contacts) {
+            callRecordRepository.clearContactReference(
+                    contact.getId(), VerificationStatus.UNMATCHED_NUMBER);
         }
-        if (outreachStatusRepository.findByCompanyId(companyId).isPresent()) {
-            throw new AdminResourceConflictException(
-                    "Company with id " + companyId + " cannot be deleted because it has outreach history");
-        }
-        if (coreOutreachStatusRepository.existsByCompanyId(companyId)) {
-            throw new AdminResourceConflictException(
-                    "Company with id " + companyId + " cannot be deleted while it has a CORE outreach status");
-        }
+        contactRepository.deleteAll(contacts);
+        outreachStatusRepository.findByCompanyId(companyId).ifPresent(outreachStatusRepository::delete);
+        coreOutreachStatusRepository.findByCompanyId(companyId).ifPresent(coreOutreachStatusRepository::delete);
         companyRepository.delete(company);
     }
 
@@ -109,11 +107,19 @@ public class AdminManagementService {
     @Transactional
     public void deleteContact(Long contactId) {
         Contact contact = findContact(contactId);
-        if (callRecordRepository.existsByContact_Id(contactId)) {
-            throw new AdminResourceConflictException(
-                    "Contact with id " + contactId + " cannot be deleted because it has call history");
-        }
+        callRecordRepository.clearContactReference(contactId, VerificationStatus.UNMATCHED_NUMBER);
         contactRepository.delete(contact);
+    }
+
+    @Transactional
+    public void deleteDuplicateCallRecord(Long callRecordId) {
+        CallRecord callRecord = callRecordRepository.findByIdForUpdate(callRecordId)
+                .orElseThrow(() -> new CallRecordNotFoundException(callRecordId));
+        if (callRecord.getVerificationStatus() != VerificationStatus.DUPLICATE_CALL) {
+            throw new AdminResourceConflictException(
+                    "Call record with id " + callRecordId + " is not marked as a duplicate");
+        }
+        callRecordRepository.delete(callRecord);
     }
 
     private Company findCompany(Long companyId) {

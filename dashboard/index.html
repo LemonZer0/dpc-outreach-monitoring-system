@@ -32,11 +32,12 @@
         <form class="connection-fields" id="connect-form">
           <label>
             Backend URL
-            <input id="backend-url" type="url" inputmode="url" value="http://localhost:8080"
-              placeholder="http://localhost:8080" autocomplete="url" required>
+            <input id="backend-url" type="url" inputmode="url" value="http://127.0.0.1:8080"
+              placeholder="http://127.0.0.1:8080" autocomplete="url" required>
           </label>
           <button class="button button-primary" id="connect-button" type="submit">Continue</button>
         </form>
+        <p class="helper-text">Open this dashboard at <code>http://127.0.0.1:8000</code>; opening <code>index.html</code> directly is blocked by browser security.</p>
         <p class="error-message" id="error-message" role="alert" hidden></p>
       </section>
 
@@ -139,10 +140,11 @@
                 <th scope="col">Duration</th>
                 <th scope="col">Verification</th>
                 <th scope="col">Record</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody id="calls-body">
-              <tr><td class="empty-state" colspan="6">Load the dashboard to see call activity.</td></tr>
+              <tr><td class="empty-state" colspan="7">Load the dashboard to see call activity.</td></tr>
             </tbody>
           </table>
         </div>
@@ -268,8 +270,52 @@
             </table>
           </div>
         </section>
-        <footer>Company/contact deletion is blocked when dependent outreach or call records exist.</footer>
+        <footer>Deleting a contact or company requires your admin password. Call history is retained as unmatched when its contact is deleted.</footer>
       </div>
+
+      <dialog class="delete-confirm-dialog" id="call-match-dialog" aria-labelledby="call-match-heading">
+        <form id="call-match-form">
+          <p class="eyebrow">UNMATCHED CALL</p>
+          <h2 id="call-match-heading">Match to a company</h2>
+          <p id="call-match-description"></p>
+          <label>
+            Contact name
+            <input id="call-match-name" type="text" maxlength="200" autocomplete="off" required>
+          </label>
+          <label>
+            Company
+            <select id="call-match-company" required>
+              <option value="">Choose a company</option>
+            </select>
+          </label>
+          <p class="form-message error" id="call-match-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button class="button button-secondary" id="call-match-cancel" type="button">Cancel</button>
+            <button class="button button-primary" id="call-match-submit" type="submit">Match call</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog class="delete-confirm-dialog" id="delete-confirm-dialog" aria-labelledby="delete-confirm-heading">
+        <form id="delete-confirm-form">
+          <p class="eyebrow">ADMIN CONFIRMATION</p>
+          <h2 id="delete-confirm-heading">Confirm deletion</h2>
+          <p id="delete-confirm-description"></p>
+          <label id="delete-confirm-username-field" hidden>
+            Admin username
+            <input id="delete-confirm-username" type="text" autocomplete="username">
+          </label>
+          <label>
+            <span id="delete-confirm-password-label">Enter your current admin password</span>
+            <input id="delete-confirm-password" type="password" autocomplete="current-password" required>
+          </label>
+          <p class="form-message error" id="delete-confirm-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button class="button button-secondary" id="delete-cancel-button" type="button">Cancel</button>
+            <button class="button button-danger" id="delete-confirm-button" type="submit">Confirm delete</button>
+          </div>
+        </form>
+      </dialog>
     </main>
   </body>
 </html>

@@ -25,11 +25,19 @@ $headers = @{ Authorization = "Basic $encodedCredentials" }
 $plainPassword = $null
 $encodedCredentials = $null
 
-function Invoke-ApiRequest([string] $Method, [string] $Path, [object] $Body = $null) {
+function Invoke-ApiRequest(
+    [string] $Method,
+    [string] $Path,
+    [object] $Body = $null,
+    [string] $RequestAuthorization
+) {
+    if ([string]::IsNullOrWhiteSpace($RequestAuthorization)) {
+        $RequestAuthorization = $headers.Authorization
+    }
     $parameters = @{
         Uri = "$ApiBaseUrl$Path"
         Method = $Method
-        Headers = $headers
+        Headers = @{ Authorization = $RequestAuthorization }
     }
     if ($null -ne $Body) {
         $parameters.ContentType = "application/json"
@@ -37,6 +45,34 @@ function Invoke-ApiRequest([string] $Method, [string] $Path, [object] $Body = $n
     }
 
     return Invoke-RestMethod @parameters
+}
+
+function Invoke-ConfirmedDelete([string] $Path, [string] $ResourceLabel) {
+    $confirmation = Read-Host "Type DELETE to delete $ResourceLabel"
+    if ($confirmation -cne "DELETE") {
+        Write-Host "Deletion cancelled."
+        return
+    }
+
+    $securePassword = Read-Host -AsSecureString "Enter the current admin password"
+    $passwordPointer = [IntPtr]::Zero
+    try {
+        $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+        $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
+        $encoded = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes("$($credential.UserName):$password"))
+        $confirmationAuthorization = "Basic $encoded"
+        $null = Invoke-ApiRequest -Method Delete -Path $Path -RequestAuthorization $confirmationAuthorization
+        Write-Host "Deleted $ResourceLabel." -ForegroundColor Green
+    } finally {
+        if ($passwordPointer -ne [IntPtr]::Zero) {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
+        }
+        $password = $null
+        $encoded = $null
+        $confirmationAuthorization = $null
+        $securePassword.Dispose()
+    }
 }
 
 function Read-RequiredValue([string] $Prompt) {
@@ -147,13 +183,7 @@ do {
             }
             "5" {
                 $contactId = Read-PositiveId "Contact ID"
-                $confirmation = Read-Host "Type DELETE to delete contact $contactId"
-                if ($confirmation -ceq "DELETE") {
-                    $null = Invoke-ApiRequest -Method Delete -Path "/api/admin/contacts/$contactId"
-                    Write-Host "Contact deleted." -ForegroundColor Green
-                } else {
-                    Write-Host "Deletion cancelled."
-                }
+                Invoke-ConfirmedDelete -Path "/api/admin/contacts/$contactId" -ResourceLabel "contact $contactId"
             }
             "6" {
                 $companyName = Read-RequiredValue "Company name"
@@ -170,13 +200,7 @@ do {
             }
             "8" {
                 $companyId = Read-PositiveId "Company ID"
-                $confirmation = Read-Host "Type DELETE to delete company $companyId"
-                if ($confirmation -ceq "DELETE") {
-                    $null = Invoke-ApiRequest -Method Delete -Path "/api/admin/companies/$companyId"
-                    Write-Host "Company deleted." -ForegroundColor Green
-                } else {
-                    Write-Host "Deletion cancelled."
-                }
+                Invoke-ConfirmedDelete -Path "/api/admin/companies/$companyId" -ResourceLabel "company $companyId"
             }
             "9" {
                 Write-Host "Goodbye."

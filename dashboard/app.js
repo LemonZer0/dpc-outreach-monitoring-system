@@ -534,7 +534,7 @@ function renderCalls() {
 
   callsBody.replaceChildren();
   if (filteredCalls.length === 0) {
-    addEmptyRow(callsBody, "No call records match this DPC and filter.", 8);
+    addEmptyRow(callsBody, "No call records match this DPC and filter.", 9);
     return;
   }
 
@@ -554,6 +554,7 @@ function renderCalls() {
       makeCell(formatDuration(call.durationSeconds)),
       makeBadgeCell(displayedVerificationStatus(call)),
       makeCell(displayCallSource(call)),
+      makeCell(displayCallOutcome(call.callOutcome)),
       makeCell(`#${call.id}`),
     );
     const actions = document.createElement("td");
@@ -583,6 +584,17 @@ function displayCallSource(call) {
   if (call.callType === "DIALER") return "App · Dialer";
   if (call.callType === "MANUAL_METADATA") return "App · Manual metadata";
   return "App · Type not recorded";
+}
+
+function displayCallOutcome(outcome) {
+  const outcomes = {
+    SPOKE_WITH_PERSON: "Spoke with a person",
+    VOICEMAIL: "Voicemail",
+    FORWARDED_OR_AUTOMATED: "Forwarded / automated",
+    NO_ANSWER: "No answer",
+    UNKNOWN: "Unknown",
+  };
+  return outcomes[outcome] || "Not recorded";
 }
 
 function createDeleteCallButton(id) {

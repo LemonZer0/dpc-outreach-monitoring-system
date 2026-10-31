@@ -83,7 +83,8 @@ public class CallVerificationService {
                 request.durationSeconds(),
                 verificationStatus,
                 callSource,
-                callType));
+                callType,
+                request.callOutcome()));
 
         if (contact != null && !duplicate && callSource == CallSource.APP) {
             updateOutreachStatus(contact, callRecord, verificationStatus);

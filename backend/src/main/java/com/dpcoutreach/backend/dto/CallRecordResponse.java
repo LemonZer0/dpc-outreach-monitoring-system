@@ -2,6 +2,7 @@ package com.dpcoutreach.backend.dto;
 
 import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.CallSource;
+import com.dpcoutreach.backend.entity.CallOutcome;
 import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 
@@ -16,7 +17,8 @@ public record CallRecordResponse(
         Integer durationSeconds,
         VerificationStatus verificationStatus,
         CallSource callSource,
-        CallType callType) {
+        CallType callType,
+        CallOutcome callOutcome) {
 
     public static CallRecordResponse from(CallRecord callRecord) {
         return new CallRecordResponse(
@@ -28,6 +30,7 @@ public record CallRecordResponse(
                 callRecord.getDurationSeconds(),
                 callRecord.getVerificationStatus(),
                 callRecord.getCallSource(),
-                callRecord.getCallType());
+                callRecord.getCallType(),
+                callRecord.getCallOutcome());
     }
 }

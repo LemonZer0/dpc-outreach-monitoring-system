@@ -186,7 +186,9 @@ class CallVerificationPostgresIntegrationTest {
                   "dpcId": %d,
                   "phoneNumber": "%s",
                   "callTimestamp": "%s",
-                  "durationSeconds": 35
+                  "durationSeconds": 35,
+                  "callType": "DIALER",
+                  "callOutcome": "VOICEMAIL"
                 }
                 """.formatted(dpc.getId(), request.phoneNumber(), request.callTimestamp());
 
@@ -196,6 +198,8 @@ class CallVerificationPostgresIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"))
+                .andExpect(jsonPath("$.callType").value("DIALER"))
+                .andExpect(jsonPath("$.callOutcome").value("VOICEMAIL"))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -208,12 +212,14 @@ class CallVerificationPostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(savedRecordId))
                 .andExpect(jsonPath("$.phoneNumber").value(request.phoneNumber().replaceAll("\\D", "")))
-                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"));
+                .andExpect(jsonPath("$.verificationStatus").value("MATCHED_CONNECTED"))
+                .andExpect(jsonPath("$.callOutcome").value("VOICEMAIL"));
 
         mockMvc.perform(get("/api/call-records").param("dpcId", dpc.getId().toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(savedRecordId))
-                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"));
+                .andExpect(jsonPath("$[0].verificationStatus").value("MATCHED_CONNECTED"))
+                .andExpect(jsonPath("$[0].callOutcome").value("VOICEMAIL"));
     }
 
     @Test

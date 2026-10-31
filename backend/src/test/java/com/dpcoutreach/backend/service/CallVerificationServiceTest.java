@@ -3,6 +3,7 @@ package com.dpcoutreach.backend.service;
 import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.dto.CallRecordMatchRequest;
 import com.dpcoutreach.backend.entity.CallRecord;
+import com.dpcoutreach.backend.entity.CallOutcome;
 import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.entity.CallType;
 import com.dpcoutreach.backend.entity.Company;
@@ -65,6 +66,19 @@ class CallVerificationServiceTest {
         CallRecord saved = harness.service.verifyAndSave(request);
 
         assertEquals(CallSource.APP, saved.getCallSource());
+        assertEquals(CallType.DIALER, saved.getCallType());
+    }
+
+    @Test
+    void storesReportedOutcomeSeparatelyWithoutChangingVerificationStatus() {
+        TestHarness harness = new TestHarness(List.of(contact()), false);
+        CallSubmissionRequest request = new CallSubmissionRequest(
+                DPC_ID, FORMATTED_PHONE, CALL_TIME, 90, CallType.DIALER, CallOutcome.VOICEMAIL);
+
+        CallRecord saved = harness.service.verifyAndSave(request);
+
+        assertEquals(VerificationStatus.MATCHED_LONG_CALL, saved.getVerificationStatus());
+        assertEquals(CallOutcome.VOICEMAIL, saved.getCallOutcome());
         assertEquals(CallType.DIALER, saved.getCallType());
     }
 

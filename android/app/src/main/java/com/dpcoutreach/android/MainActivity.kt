@@ -19,6 +19,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
@@ -38,10 +39,13 @@ class MainActivity : Activity() {
     private lateinit var phoneInput: EditText
     private lateinit var timestampInput: EditText
     private lateinit var durationInput: EditText
+    private lateinit var outcomeSpinner: Spinner
+    private lateinit var submitCallButton: Button
     private lateinit var statusText: TextView
     private lateinit var contactsContainer: LinearLayout
 
     private var pendingCall: PendingCall? = null
+    private var pendingDialerCall: LoggedCall? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,7 +151,26 @@ class MainActivity : Activity() {
         content.addView(timestampInput)
         durationInput = input("Call duration in seconds", "", InputType.TYPE_CLASS_NUMBER)
         content.addView(durationInput)
-        content.addView(actionButton("Submit call metadata", ::submitManualCall))
+        content.addView(text("Reported call outcome (self-reported)", 14, Color.rgb(82, 96, 109), true))
+        content.addView(text(
+            "Duration cannot tell whether a person, voicemail, or forwarding answered. Record what you observed.",
+            13,
+            Color.rgb(82, 96, 109)
+        ))
+        outcomeSpinner = Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_item,
+                callOutcomes.map { it.label }
+            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8) }
+        }
+        content.addView(outcomeSpinner)
+        submitCallButton = actionButton("Submit call metadata", ::submitManualCall)
+        content.addView(submitCallButton)
 
         content.addView(sectionTitle("Status"))
         statusText = text("Ready.", 14, Color.rgb(16, 42, 67))
@@ -193,6 +216,9 @@ class MainActivity : Activity() {
         }
         val dpcId = readDpcId() ?: return
         saveSettings()
+        pendingDialerCall = null
+        outcomeSpinner.setSelection(0)
+        submitCallButton.text = "Submit call metadata"
         val now = System.currentTimeMillis()
         pendingCall = PendingCall(phone, now)
         preferences.edit()
@@ -235,7 +261,10 @@ class MainActivity : Activity() {
             phoneInput.setText(call.phoneNumber)
             timestampInput.setText(Instant.ofEpochMilli(call.timestampMillis).toString())
             durationInput.setText(call.durationSeconds.toString())
-            submitCall(call.phoneNumber, call.timestampMillis, call.durationSeconds, "DIALER")
+            pendingDialerCall = call
+            outcomeSpinner.setSelection(0)
+            submitCallButton.text = "Submit dialer call"
+            setStatus("Call details loaded. Select the reported outcome, then tap Submit dialer call.")
         } catch (securityException: SecurityException) {
             setStatus("Android denied call-log access. Enter the timestamp and duration manually.")
         } catch (exception: Exception) {
@@ -300,10 +329,28 @@ class MainActivity : Activity() {
             setStatus("Enter a non-negative whole number of seconds.")
             return
         }
-        submitCall(phone, timestamp.toEpochMilli(), duration, "MANUAL_METADATA")
+        val outcome = callOutcomes[outcomeSpinner.selectedItemPosition]
+        val dialerCall = pendingDialerCall
+        if (dialerCall != null) {
+            submitCall(
+                dialerCall.phoneNumber,
+                dialerCall.timestampMillis,
+                dialerCall.durationSeconds,
+                "DIALER",
+                outcome
+            )
+        } else {
+            submitCall(phone, timestamp.toEpochMilli(), duration, "MANUAL_METADATA", outcome)
+        }
     }
 
-    private fun submitCall(phone: String, timestampMillis: Long, durationSeconds: Int, callType: String) {
+    private fun submitCall(
+        phone: String,
+        timestampMillis: Long,
+        durationSeconds: Int,
+        callType: String,
+        callOutcome: CallOutcomeOption
+    ) {
         val dpcId = readDpcId() ?: return
         val endpoint = apiUrl("/api/call-records") ?: return
         saveSettings()
@@ -313,15 +360,19 @@ class MainActivity : Activity() {
             .put("callTimestamp", Instant.ofEpochMilli(timestampMillis).toString())
             .put("durationSeconds", durationSeconds)
             .put("callType", callType)
+            .put("callOutcome", callOutcome.code)
         setStatus("Submitting call metadata...")
         runRequest {
             val response = JSONObject(request(endpoint, "POST", payload.toString()))
             clearPendingCall()
             pendingCall = null
+            pendingDialerCall = null
             runOnUiThread {
+                outcomeSpinner.setSelection(0)
+                submitCallButton.text = "Submit call metadata"
                 setStatus(
                     "Call saved. Status: ${response.optString("verificationStatus")}; " +
-                        "record ID: ${response.optLong("id")}."
+                        "outcome: ${callOutcome.label}; record ID: ${response.optLong("id")}."
                 )
             }
         }
@@ -465,6 +516,7 @@ class MainActivity : Activity() {
 
     private data class PendingCall(val phoneNumber: String, val startedAtMillis: Long)
     private data class LoggedCall(val phoneNumber: String, val timestampMillis: Long, val durationSeconds: Int)
+    private data class CallOutcomeOption(val label: String, val code: String)
 
     companion object {
         private const val REQUEST_DIALER = 100
@@ -478,4 +530,12 @@ class MainActivity : Activity() {
         private const val STATE_PENDING_PHONE = "state-pending-phone"
         private const val STATE_PENDING_TIMESTAMP = "state-pending-timestamp"
     }
+
+    private val callOutcomes = listOf(
+        CallOutcomeOption("Unknown", "UNKNOWN"),
+        CallOutcomeOption("Spoke with a person", "SPOKE_WITH_PERSON"),
+        CallOutcomeOption("Voicemail", "VOICEMAIL"),
+        CallOutcomeOption("Forwarded / automated system", "FORWARDED_OR_AUTOMATED"),
+        CallOutcomeOption("No answer", "NO_ANSWER")
+    )
 }

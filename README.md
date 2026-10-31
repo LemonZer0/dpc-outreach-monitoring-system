@@ -143,6 +143,22 @@ created from the simulation form are stored as `SIMULATION`. Existing records
 are preserved as app submissions; their type remains unrecorded because older
 versions did not distinguish dialer calls from manual metadata.
 
+For app calls, the DPC can also report whether they spoke with a person,
+reached voicemail, encountered forwarding or an automated system, had no
+answer, or could not determine the outcome. Dialer submissions load call
+details into the form; the DPC selects an outcome and explicitly taps
+**Submit dialer call**. Manual submissions select the outcome before tapping
+**Submit call metadata**.
+This self-reported outcome is stored separately and does not change call
+verification status. Verification continues to depend on contact matching,
+duration, and duplicate detection; call duration alone cannot establish that a
+person answered.
+
+Verification status is a technical classification and does not include the
+self-reported outcome: an answered voicemail with a long duration can still be
+`MATCHED_LONG_CALL`. Use the separate reported-outcome field to distinguish
+that from a conversation with a person.
+
 The admin dashboard lets CORE create, rename, and delete companies; create,
 edit, and delete contacts; create DPC entries; and set each company's
 manual decision to `Confirmed`, `Pending`, `Declined`, or `Not set`.

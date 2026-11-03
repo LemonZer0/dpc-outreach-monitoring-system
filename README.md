@@ -264,6 +264,14 @@ For a real call, tap **Open dialer**, place the call, then return to the
 app and check the call log. The app does not place calls without user
 interaction.
 
+For a physical phone, connect it and the laptop to the same Wi-Fi network,
+find the laptop's current IPv4 address, and set the app's backend URL to
+`http://<laptop-ip>:8080` (for example, `http://192.168.1.25:8080`). The app
+saves this URL when loading contacts or submitting a call. Debug builds allow
+HTTP to the configured address so a changed laptop IP does not require
+rebuilding the APK. Release builds do not allow HTTP to arbitrary LAN addresses;
+use HTTPS for release deployments.
+
 BlueStacks may not include a dialer or expose call-log data. In that case,
 use manual timestamp and duration entry to test submission, and use a
 physical Android device to test the dialer and call-log flow. Manual

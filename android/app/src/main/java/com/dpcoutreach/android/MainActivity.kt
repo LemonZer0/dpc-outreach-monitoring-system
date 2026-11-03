@@ -111,11 +111,16 @@ class MainActivity : Activity() {
 
         content.addView(sectionTitle("Backend"))
         backendUrlInput = input(
-            "Backend URL (emulator: http://10.0.2.2:8080)",
+            "Backend URL (emulator: http://10.0.2.2:8080; phone: http://<laptop-ip>:8080)",
             preferences.getString(KEY_BACKEND_URL, "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080",
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         )
         content.addView(backendUrlInput)
+        content.addView(text(
+            "For a phone, use your laptop's current Wi-Fi IP. Keep both devices on the same network.",
+            13,
+            Color.rgb(82, 96, 109)
+        ))
         dpcIdInput = input(
             "DPC ID (shown in backend demo startup log)",
             preferences.getString(KEY_DPC_ID, "") ?: "",

@@ -31,13 +31,13 @@
         </div>
         <form class="connection-fields" id="connect-form">
           <label>
-            Backend URL
+            Backend URL (for separately hosted dashboards)
             <input id="backend-url" type="url" inputmode="url" value="http://127.0.0.1:8080"
               placeholder="http://127.0.0.1:8080" autocomplete="url" required>
           </label>
           <button class="button button-primary" id="connect-button" type="submit">Continue</button>
         </form>
-        <p class="helper-text">Start the backend with <code>backend\scripts\start-backend.ps1</code>, then open <code>http://localhost:8080/</code>.</p>
+        <p class="helper-text" id="connection-helper">If this dashboard is hosted separately, enter the backend URL. For local development, start the backend and open <code>http://localhost:8080/</code>.</p>
         <p class="error-message" id="error-message" role="alert" hidden></p>
       </section>
 

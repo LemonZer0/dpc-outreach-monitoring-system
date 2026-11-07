@@ -153,12 +153,14 @@ limits before relying on the deployment.
    URL such as `https://dpc-outreach-monitoring.onrender.com`. Open
    `<service-url>/api/health`; a healthy deployment returns `status: UP`.
    The first request after the free service sleeps can take about a minute.
-     Flyway creates the initial schema and applies subsequent migrations on a
-     new empty database.
-4. Open the dashboard at the service root URL. Use the configured admin
-   credentials for protected dashboard actions. In the Android app, set the
-   backend URL to the Render HTTPS URL (without an API path), then load
-   contacts and test a call submission.
+   Flyway creates the initial schema and applies subsequent migrations on a
+   new empty database.
+4. Open the dashboard at the service root URL. It automatically connects to
+   the backend on that same URL; no separate dashboard backend URL is needed.
+   Use the configured admin credentials for protected dashboard actions. In
+   the Android app, the deployed Render HTTPS URL is the default backend.
+   Load contacts and test a call submission; change the app's URL only when
+   intentionally testing against a local backend.
 
 Render's free web service has an ephemeral filesystem, so the database must
 remain in Neon and must not be stored in the container. Store credentials in

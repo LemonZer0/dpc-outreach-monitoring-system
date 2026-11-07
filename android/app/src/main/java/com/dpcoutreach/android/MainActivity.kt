@@ -49,6 +49,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        migrateLegacyBackendUrl()
         pendingCall = savedInstanceState?.let {
             val phone = it.getString(STATE_PENDING_PHONE)
             val timestamp = it.getLong(STATE_PENDING_TIMESTAMP, -1L)
@@ -58,6 +59,13 @@ class MainActivity : Activity() {
         }
         setContentView(createContent())
         setStatus("Enter the backend URL and DPC ID, then load the contact directory.")
+    }
+
+    private fun migrateLegacyBackendUrl() {
+        val savedUrl = preferences.getString(KEY_BACKEND_URL, null)?.trim()?.trimEnd('/')
+        if (savedUrl == null || savedUrl in LEGACY_BACKEND_URLS) {
+            preferences.edit().putString(KEY_BACKEND_URL, DEFAULT_BACKEND_URL).apply()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -111,13 +119,13 @@ class MainActivity : Activity() {
 
         content.addView(sectionTitle("Backend"))
         backendUrlInput = input(
-            "Backend URL (emulator: http://10.0.2.2:8080; phone: http://<laptop-ip>:8080)",
-            preferences.getString(KEY_BACKEND_URL, "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080",
+            "Backend URL (deployed service by default)",
+            preferences.getString(KEY_BACKEND_URL, DEFAULT_BACKEND_URL) ?: DEFAULT_BACKEND_URL,
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         )
         content.addView(backendUrlInput)
         content.addView(text(
-            "For a phone, use your laptop's current Wi-Fi IP. Keep both devices on the same network.",
+            "The app connects to the deployed service by default. Change this only when testing against a local backend.",
             13,
             Color.rgb(82, 96, 109)
         ))
@@ -528,11 +536,17 @@ class MainActivity : Activity() {
         private const val REQUEST_CALL_LOG = 101
         private const val CONNECT_TIMEOUT_MILLIS = 15_000
         private const val READ_TIMEOUT_MILLIS = 90_000
+        private const val DEFAULT_BACKEND_URL = "https://dpc-outreach-monitoring.onrender.com"
         private const val CALL_LOG_CLOCK_TOLERANCE_MILLIS = 60_000L
         private const val KEY_BACKEND_URL = "backend-url"
         private const val KEY_DPC_ID = "dpc-id"
         private const val KEY_PENDING_PHONE = "pending-phone"
         private const val KEY_PENDING_TIMESTAMP = "pending-timestamp"
+        private val LEGACY_BACKEND_URLS = setOf(
+            "http://10.0.2.2:8080",
+            "http://192.168.0.190",
+            "http://192.168.0.190:8080"
+        )
         private const val STATE_PENDING_PHONE = "state-pending-phone"
         private const val STATE_PENDING_TIMESTAMP = "state-pending-timestamp"
     }

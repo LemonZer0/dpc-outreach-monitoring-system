@@ -105,11 +105,22 @@ const state = {
 
 const servedByBackend = location.port === "8080" &&
   ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
-backendInput.value = servedByBackend
+const isLocalHost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+const useSameOriginBackend = servedByBackend || !isLocalHost;
+const connectionHelper = document.querySelector("#connection-helper");
+backendInput.value = useSameOriginBackend
   ? location.origin
   : localStorage.getItem("dpc-dashboard-backend-url") || backendInput.value;
+if (useSameOriginBackend) {
+  connectForm.hidden = true;
+  connectionHelper.hidden = true;
+  document.querySelector("#connection-heading").textContent = "Connecting to this deployment";
+}
 
 connectForm.addEventListener("submit", connectToBackend);
+if (useSameOriginBackend) {
+  connectToBackend();
+}
 normalModeButton.addEventListener("click", openNormalDashboard);
 adminModeButton.addEventListener("click", () => {
   simulationSigninForm.hidden = true;
@@ -145,6 +156,9 @@ document.querySelector("#change-backend-button").addEventListener("click", () =>
   simulationSigninForm.hidden = true;
   modePanel.hidden = true;
   connectionPanel.hidden = false;
+  document.querySelector("#connection-heading").textContent = "Connect to a backend";
+  connectForm.hidden = false;
+  connectionHelper.hidden = false;
   pageSubtitle.textContent = "Connect to the backend to continue.";
   setConnection("Not connected");
   backendInput.focus();
@@ -232,7 +246,7 @@ function showAdminMessage(message, isError = false) {
 }
 
 async function connectToBackend(event) {
-  event.preventDefault();
+  event?.preventDefault();
   setError("");
 
   if (location.protocol === "file:") {
@@ -254,8 +268,8 @@ async function connectToBackend(event) {
   setConnection("Checking backend…", "loading");
   try {
     const [health, dpcs] = await Promise.all([
-      getJson(baseUrl, "/api/health", { timeoutMs: 8000 }),
-      getJson(baseUrl, "/api/dpcs", { timeoutMs: 8000 }),
+      getJson(baseUrl, "/api/health", { timeoutMs: 90000 }),
+      getJson(baseUrl, "/api/dpcs", { timeoutMs: 90000 }),
     ]);
     if (health.status !== "UP") {
       throw new Error("The backend health check did not report UP.");
@@ -272,8 +286,11 @@ async function connectToBackend(event) {
     pageSubtitle.textContent = "Choose the dashboard that matches your role.";
   } catch (error) {
     setConnection("Connection failed");
+    connectForm.hidden = false;
+    connectionHelper.hidden = false;
+    document.querySelector("#connection-heading").textContent = "Connect to a backend";
     const guidance = error instanceof TypeError
-      ? " Check that the backend URL is correct and that the backend is running. If the dashboard is served separately, its origin must be allowed by the backend."
+      ? " Check that the backend is running. If this dashboard is hosted separately, enter the backend URL and ensure its origin is allowed by the backend."
       : "";
     setError(`${error.message || "Could not connect to the backend."}${guidance}`);
   } finally {

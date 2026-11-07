@@ -5,7 +5,9 @@ import com.dpcoutreach.backend.dto.CallSubmissionRequest;
 import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncRequestedEvent;
 import jakarta.validation.Valid;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,12 +25,15 @@ public class DpcSimulationController {
 
     private final CallVerificationService callVerificationService;
     private final CallRecordQueryService callRecordQueryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DpcSimulationController(
             CallVerificationService callVerificationService,
-            CallRecordQueryService callRecordQueryService) {
+            CallRecordQueryService callRecordQueryService,
+            ApplicationEventPublisher eventPublisher) {
         this.callVerificationService = callVerificationService;
         this.callRecordQueryService = callRecordQueryService;
+        this.eventPublisher = eventPublisher;
     }
 
     @GetMapping("/call-records")
@@ -39,7 +44,9 @@ public class DpcSimulationController {
     @PostMapping("/call-records")
     public ResponseEntity<CallRecordResponse> addCallRecord(
             @Valid @RequestBody CallSubmissionRequest request) {
+        var callRecord = callVerificationService.verifyAndSaveSimulation(request);
+        eventPublisher.publishEvent(new GoogleSheetsSyncRequestedEvent());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(CallRecordResponse.from(callVerificationService.verifyAndSaveSimulation(request)));
+                .body(CallRecordResponse.from(callRecord));
     }
 }

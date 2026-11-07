@@ -86,6 +86,44 @@ $env:SPRING_PROFILES_ACTIVE = "demo"
 The startup log prints the demo DPC, company, and contact IDs. Demo
 records are not seeded unless the `demo` profile is enabled.
 
+## Google Sheets mirror
+
+The backend can mirror its database into six tabs in a Google spreadsheet:
+**Call records**, **DPCs**, **Contacts**, **Companies**, **DPC outreach
+status**, and **CORE outreach decisions**. Simulated and app call records
+share the Call records tab and are distinguished by the **Call source** value.
+The backend creates any missing managed tabs and replaces their contents on
+each sync; other tabs in the spreadsheet are left untouched. Database changes
+are synchronized after commit, and the backend performs a sync when it starts.
+If Google Sheets is unavailable, the database write still succeeds; the sync
+status reports the failure and an admin can retry it.
+
+To configure it:
+
+1. In Google Cloud, enable the Google Sheets API and create a service account
+   with a JSON key.
+2. Create or choose a spreadsheet and share it with the service account's
+   `client_email` as an editor. The spreadsheet ID is the value between `/d/`
+   and `/edit` in its URL.
+3. Keep the service-account JSON key outside the repository. In PowerShell,
+   set the spreadsheet ID and key path before starting the backend:
+
+   ```powershell
+   $env:GOOGLE_SHEETS_SPREADSHEET_ID = "1L_qw820bYyZ4WoA0CrKaX2eOJr7leNIqF-uVb-QIgrw"
+   $env:GOOGLE_SHEETS_CREDENTIALS_FILE = "C:\secure\dpc-outreach-call-monitoring-f6036bdbdc05.json"
+   Set-Location .\backend
+   .\scripts\start-backend.ps1
+   ```
+
+4. Check sync state at
+   `GET /api/admin/google-sheets/status` or trigger a full resync with
+   `POST /api/admin/google-sheets/sync`; both endpoints require admin
+   credentials.
+
+The spreadsheet contains call phone numbers and contact details. Share it
+only with people authorized to access this information. Do not commit the
+service-account key.
+
 To use the interactive API client while the backend is running, open a
 second PowerShell window in `backend/` and run:
 

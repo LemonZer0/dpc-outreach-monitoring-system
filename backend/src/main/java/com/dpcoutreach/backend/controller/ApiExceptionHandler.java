@@ -6,6 +6,7 @@ import com.dpcoutreach.backend.service.AdminResourceNotFoundException;
 import com.dpcoutreach.backend.service.CallRecordNotFoundException;
 import com.dpcoutreach.backend.service.CallRecordMatchConflictException;
 import com.dpcoutreach.backend.service.DpcNotFoundException;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -53,6 +54,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AdminResourceConflictException.class)
     public ResponseEntity<ApiErrorResponse> handleAdminResourceConflict(AdminResourceConflictException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(GoogleSheetsSyncException.class)
+    public ResponseEntity<ApiErrorResponse> handleGoogleSheetsSyncFailure(GoogleSheetsSyncException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiErrorResponse(exception.getMessage()));
     }
 
 }

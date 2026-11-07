@@ -14,10 +14,12 @@ import com.dpcoutreach.backend.service.CallRecordNotFoundException;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
 import com.dpcoutreach.backend.service.DpcNotFoundException;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncRequestedEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -39,6 +41,7 @@ class CallRecordControllerTest {
 
     private final CallVerificationService callVerificationService = mock(CallVerificationService.class);
     private final CallRecordQueryService callRecordQueryService = mock(CallRecordQueryService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     private MockMvc mockMvc;
 
@@ -46,7 +49,10 @@ class CallRecordControllerTest {
     void setUp() {
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new CallRecordController(callVerificationService, callRecordQueryService))
+                        new CallRecordController(
+                                callVerificationService,
+                                callRecordQueryService,
+                                eventPublisher))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -70,6 +76,7 @@ class CallRecordControllerTest {
                 .andExpect(jsonPath("$.durationSeconds").value(35));
 
         verify(callVerificationService).verifyAndSave(any(CallSubmissionRequest.class));
+        verify(eventPublisher).publishEvent(any(GoogleSheetsSyncRequestedEvent.class));
     }
 
     @Test

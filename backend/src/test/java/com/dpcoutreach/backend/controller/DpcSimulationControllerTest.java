@@ -7,10 +7,12 @@ import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncRequestedEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -22,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,6 +33,7 @@ class DpcSimulationControllerTest {
 
     private final CallVerificationService callVerificationService = mock(CallVerificationService.class);
     private final CallRecordQueryService callRecordQueryService = mock(CallRecordQueryService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     private MockMvc mockMvc;
 
@@ -39,7 +41,10 @@ class DpcSimulationControllerTest {
     void setUp() {
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new DpcSimulationController(callVerificationService, callRecordQueryService))
+                        new DpcSimulationController(
+                                callVerificationService,
+                                callRecordQueryService,
+                                eventPublisher))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -92,6 +97,7 @@ class DpcSimulationControllerTest {
                 .andExpect(jsonPath("$.callType").value(org.hamcrest.Matchers.nullValue()));
 
         verify(callVerificationService).verifyAndSaveSimulation(any(CallSubmissionRequest.class));
+        verify(eventPublisher).publishEvent(any(GoogleSheetsSyncRequestedEvent.class));
     }
 
     @Test

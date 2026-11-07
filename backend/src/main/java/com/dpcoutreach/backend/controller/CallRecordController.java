@@ -7,7 +7,9 @@ import com.dpcoutreach.backend.entity.CallRecord;
 import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.service.CallRecordQueryService;
 import com.dpcoutreach.backend.service.CallVerificationService;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncRequestedEvent;
 import jakarta.validation.Valid;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,17 +28,21 @@ public class CallRecordController {
 
     private final CallVerificationService callVerificationService;
     private final CallRecordQueryService callRecordQueryService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CallRecordController(
             CallVerificationService callVerificationService,
-            CallRecordQueryService callRecordQueryService) {
+            CallRecordQueryService callRecordQueryService,
+            ApplicationEventPublisher eventPublisher) {
         this.callVerificationService = callVerificationService;
         this.callRecordQueryService = callRecordQueryService;
+        this.eventPublisher = eventPublisher;
     }
 
     @PostMapping
     public ResponseEntity<CallRecordResponse> submitCall(@Valid @RequestBody CallSubmissionRequest request) {
         CallRecord callRecord = callVerificationService.verifyAndSave(request);
+        eventPublisher.publishEvent(new GoogleSheetsSyncRequestedEvent());
         return ResponseEntity.status(HttpStatus.CREATED).body(CallRecordResponse.from(callRecord));
     }
 
@@ -49,7 +55,9 @@ public class CallRecordController {
     public CallRecordResponse matchUnmatchedCall(
             @PathVariable Long id,
             @Valid @RequestBody CallRecordMatchRequest request) {
-        return CallRecordResponse.from(callVerificationService.matchUnmatchedCall(id, request));
+        CallRecord callRecord = callVerificationService.matchUnmatchedCall(id, request);
+        eventPublisher.publishEvent(new GoogleSheetsSyncRequestedEvent());
+        return CallRecordResponse.from(callRecord);
     }
 
     @GetMapping("/{id}")

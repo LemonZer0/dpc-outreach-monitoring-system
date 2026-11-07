@@ -6,10 +6,12 @@ import com.dpcoutreach.backend.dto.DpcWriteRequest;
 import com.dpcoutreach.backend.entity.CoreOutreachStatusValue;
 import com.dpcoutreach.backend.service.AdminManagementService;
 import com.dpcoutreach.backend.service.CoreOutreachStatusService;
+import com.dpcoutreach.backend.service.GoogleSheetsSyncRequestedEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -30,6 +32,7 @@ class AdminManagementControllerTest {
 
     private final AdminManagementService adminManagementService = mock(AdminManagementService.class);
     private final CoreOutreachStatusService coreOutreachStatusService = mock(CoreOutreachStatusService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     private MockMvc mockMvc;
 
@@ -37,7 +40,10 @@ class AdminManagementControllerTest {
     void setUp() {
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AdminManagementController(adminManagementService, coreOutreachStatusService))
+                        new AdminManagementController(
+                                adminManagementService,
+                                coreOutreachStatusService,
+                                eventPublisher))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -86,6 +92,7 @@ class AdminManagementControllerTest {
                 .andExpect(jsonPath("$.name").value("New DPC"))
                 .andExpect(jsonPath("$.accountInformation").doesNotExist());
         verify(adminManagementService).createDpc(new DpcWriteRequest("New DPC"));
+        verify(eventPublisher).publishEvent(any(GoogleSheetsSyncRequestedEvent.class));
     }
 
     @Test

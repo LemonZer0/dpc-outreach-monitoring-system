@@ -432,8 +432,8 @@ class MainActivity : Activity() {
     private fun request(url: String, method: String, body: String? = null): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.requestMethod = method
-        connection.connectTimeout = NETWORK_TIMEOUT_MILLIS
-        connection.readTimeout = NETWORK_TIMEOUT_MILLIS
+        connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
+        connection.readTimeout = READ_TIMEOUT_MILLIS
         connection.setRequestProperty("Accept", "application/json")
         if (body != null) {
             connection.doOutput = true
@@ -526,7 +526,8 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_DIALER = 100
         private const val REQUEST_CALL_LOG = 101
-        private const val NETWORK_TIMEOUT_MILLIS = 10_000
+        private const val CONNECT_TIMEOUT_MILLIS = 15_000
+        private const val READ_TIMEOUT_MILLIS = 90_000
         private const val CALL_LOG_CLOCK_TOLERANCE_MILLIS = 60_000L
         private const val KEY_BACKEND_URL = "backend-url"
         private const val KEY_DPC_ID = "dpc-id"

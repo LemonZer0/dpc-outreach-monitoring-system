@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+.gradle
+**/build
+**/target
+android
+secrets
+**/*.jks
+**/*.keystore
+**/application-local.properties
+**/application-secret.properties
+**/.env
+**/.env.*

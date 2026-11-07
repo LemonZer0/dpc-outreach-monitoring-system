@@ -124,6 +124,47 @@ The spreadsheet contains call phone numbers and contact details. Share it
 only with people authorized to access this information. Do not commit the
 service-account key.
 
+## Free student-demo deployment
+
+The repository includes a Render Blueprint and Dockerfile for deploying the
+Spring Boot backend and dashboard to Render, with PostgreSQL hosted separately
+on Neon's free tier. This configuration is intended for a class demo, not
+production or sensitive real-world call data. Free services can sleep, restart,
+or have provider-specific storage and usage limits. Check current provider
+limits before relying on the deployment.
+
+1. Create a Neon project in the Singapore region and create its database.
+   Copy the connection details. Use Neon's pooled connection host if provided,
+   and convert its JDBC URL to this form:
+   `jdbc:postgresql://<host>/<database>?sslmode=require`
+2. Push the repository to GitHub and create a new Blueprint in Render from
+   that repository, using the root `render.yaml`. Set the environment values
+   prompted by Render:
+   - `SPRING_DATASOURCE_URL`: the JDBC URL from step 1
+   - `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`: Neon role
+     credentials
+   - `ADMIN_USERNAME` and `ADMIN_PASSWORD`: new, strong dashboard admin
+     credentials
+   - `GOOGLE_SHEETS_SPREADSHEET_ID` and
+     `GOOGLE_SHEETS_CREDENTIALS_FILE`: optional; leave both unset to disable
+     the Sheets mirror. To enable it, upload the service-account JSON as a
+     Render secret file and set the file variable to its mounted path.
+3. Wait for the first Docker build/deploy to finish. Render assigns an HTTPS
+   URL such as `https://dpc-outreach-monitoring.onrender.com`. Open
+   `<service-url>/api/health`; a healthy deployment returns `status: UP`.
+   The first request after the free service sleeps can take about a minute.
+4. Open the dashboard at the service root URL. Use the configured admin
+   credentials for protected dashboard actions. In the Android app, set the
+   backend URL to the Render HTTPS URL (without an API path), then load
+   contacts and test a call submission.
+
+Render's free web service has an ephemeral filesystem, so the database must
+remain in Neon and must not be stored in the container. Store credentials in
+Render's environment/secret-file settings, never in the repository. Do not
+reuse development admin passwords for a public deployment.
+The Android client allows up to 90 seconds for a response so its first request
+can wait for a sleeping free web service to start.
+
 To use the interactive API client while the backend is running, open a
 second PowerShell window in `backend/` and run:
 

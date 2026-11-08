@@ -1,24 +1,36 @@
 # DPC Outreach Call Monitoring System
 
-## CS5013 Course Project
+**CS5013 Course Project**
 
 A system for monitoring and verifying company outreach calls made by
 Department Placement Coordinators (DPCs).
 
-## Problem
+## Contents
+
+- [Project overview](#project-overview): problem, goal, and architecture
+- [Repository and local setup](#repository-and-local-setup): code layout, backend demo data, and Sheets setup
+- [Deployment and handoff](#deployment-and-handoff): Render demo and course Docker image
+- [Dashboard and administration](#dashboard-and-administration): user views, admin tools, and API clients
+- [Technology stack](#technology-stack): backend, Android, dashboard, and integrations
+- [Android client](#android-client): build and emulator or device demo
+- [Team and support](#team-and-support): project team and contact route
+
+## Project overview
+
+### Problem
 
 The Placement & Internship CORE currently relies on DPCs manually
 updating a Google Sheet with company outreach information. This makes
 it difficult to verify whether outreach calls were actually made.
 
-## Goal
+### Goal
 
 The system automatically captures call metadata from an Android device,
 matches the call to a verified recruiter/company contact, stores the
 result in PostgreSQL, and provides the Placement & Internship CORE with
 a dashboard and automatically synchronized Google Sheet.
 
-## Architecture
+### Architecture
 
 ```text
 Android App
@@ -44,7 +56,74 @@ Google Sheets Integration
 
 *Note: This represents the planned system architecture.*
 
-## Repository structure
+## System summary
+
+### Main components
+
+- Android Call Client
+- Spring Boot Backend
+- PostgreSQL Database
+- CORE Dashboard
+- Google Sheets Integration
+
+### Core workflow
+
+1. DPC selects a company/contact.
+2. Android application launches the normal phone dialer.
+3. DPC makes the phone call.
+4. Android records the call in the call log.
+5. Android application obtains call metadata.
+6. Metadata is sent to the backend.
+7. Backend validates and matches the call.
+8. Verification result is stored in PostgreSQL.
+9. Dashboard displays updated outreach information.
+10. Google Sheet is synchronized automatically.
+
+### Scope
+
+The system verifies recorded outreach activity using call metadata such
+as phone number, timestamp, duration, and call direction.
+
+Calls matched to a known contact with a duration greater than 60 seconds
+are labeled `MATCHED_LONG_CALL`. This is a duration-based heuristic only;
+it does not verify that a discussion took place.
+
+The system does NOT:
+
+- record calls
+- transcribe calls
+- inspect conversation content
+- determine what was discussed
+- determine whether the conversation was useful
+
+### Technology stack
+
+#### Backend
+
+- Java
+- Spring Boot
+- Maven
+- Spring Web
+- Spring Data JPA
+- PostgreSQL
+
+#### Android
+
+- Android
+- Kotlin
+
+#### Dashboard
+
+- HTML, CSS, JavaScript
+
+#### Integration
+
+- Google Sheets API
+- Google OAuth
+
+## Repository and local setup
+
+### Repository structure
 
 The main source files and their roles are:
 
@@ -88,7 +167,7 @@ The course Docker image packages the backend and dashboard from `backend/` and
 deployment. Android build output is written under
 `android/app/build/outputs/` and is ignored by Git.
 
-## Backend demo data
+### Backend demo data
 
 The backend can seed one local demo DPC, company, and contact when the
 `demo` Spring profile is enabled. Set `DEMO_CONTACT_PHONE` to the phone
@@ -130,7 +209,7 @@ $env:SPRING_PROFILES_ACTIVE = "demo"
 The startup log prints the demo DPC, company, and contact IDs. Demo
 records are not seeded unless the `demo` profile is enabled.
 
-## Google Sheets mirror
+### Google Sheets mirror
 
 The backend can mirror its database into six tabs in a Google spreadsheet:
 **Call records**, **DPCs**, **Contacts**, **Companies**, **DPC outreach
@@ -153,8 +232,8 @@ To configure it:
    set the spreadsheet ID and key path before starting the backend:
 
    ```powershell
-   $env:GOOGLE_SHEETS_SPREADSHEET_ID = "1L_qw820bYyZ4WoA0CrKaX2eOJr7leNIqF-uVb-QIgrw"
-   $env:GOOGLE_SHEETS_CREDENTIALS_FILE = "C:\secure\dpc-outreach-call-monitoring-f6036bdbdc05.json"
+   $env:GOOGLE_SHEETS_SPREADSHEET_ID = "your-spreadsheet-id"
+   $env:GOOGLE_SHEETS_CREDENTIALS_FILE = "C:\secure\service-account-key.json"
    Set-Location .\backend
    .\scripts\start-backend.ps1
    ```
@@ -168,7 +247,9 @@ The spreadsheet contains call phone numbers and contact details. Share it
 only with people authorized to access this information. Do not commit the
 service-account key.
 
-## Free student-demo deployment
+## Deployment and handoff
+
+### Free student-demo deployment
 
 The repository includes a Render Blueprint and Dockerfile for deploying the
 Spring Boot backend and dashboard to Render, with PostgreSQL hosted separately
@@ -213,7 +294,7 @@ reuse development admin passwords for a public deployment.
 The Android client allows up to 90 seconds for a response so its first request
 can wait for a sleeping free web service to start.
 
-## Docker image for course staff
+### Docker image for course staff
 
 The course-demo image contains the backend, dashboard, and local PostgreSQL in
 one container. It needs no hosted database, Compose file, or Google Sheets
@@ -223,14 +304,30 @@ personal admin credentials are built into the image. Database files are stored
 in the container's `/var/lib/postgresql/data`; mount a Docker volume there to
 keep data when replacing the container.
 
-Build and run the image from the exact submission commit:
+The submitted image is tagged `dpc-outreach-monitoring:232dd51d15c8c830d69168a17eb23af5396be88e` and is built from the `final-submission` Git tag. Staff can build the image from source using the steps below. If the archive is included with the course submission, it can be loaded directly instead.
+
+To build an archive from the pinned source (requires Git and Docker Desktop):
 
 ```powershell
+git clone https://github.com/LemonZer0/dpc-outreach-monitoring-system.git
+Set-Location .\dpc-outreach-monitoring-system
+git checkout final-submission
 $sha = (git rev-parse HEAD).Trim()
 $image = "dpc-outreach-monitoring:$sha"
 docker build --pull -f Dockerfile.course-demo -t $image .
 docker save -o ".\dpc-outreach-monitoring-$sha.tar" $image
-docker run -d --name dpc-outreach-demo -p 127.0.0.1:8080:8080 -v dpc-outreach-data:/var/lib/postgresql/data $image
+```
+
+The resulting archive is `dpc-outreach-monitoring-232dd51d15c8c830d69168a17eb23af5396be88e.tar` (about 231 MiB). If you receive this archive with the course submission, load it with:
+
+```powershell
+docker load -i .\dpc-outreach-monitoring-232dd51d15c8c830d69168a17eb23af5396be88e.tar
+```
+
+Then start the container, whether you built or loaded the image:
+
+```powershell
+docker run -d --name dpc-outreach-demo -p 127.0.0.1:8080:8080 -v dpc-outreach-data:/var/lib/postgresql/data dpc-outreach-monitoring:232dd51d15c8c830d69168a17eb23af5396be88e
 ```
 
 Open `http://127.0.0.1:8080/`. Retrieve the generated admin credentials with
@@ -240,11 +337,14 @@ Open `http://127.0.0.1:8080/`. Retrieve the generated admin credentials with
 the next run. The image also runs without a volume, in which case its database
 is removed with the container. The Android APK is a separate artifact.
 
-Upload the saved archive to the team's Google Drive and grant the course staff
-Google group view access. In the report, include the archive link and the
-SHA-tagged image name. After downloading the archive, staff can load it with
-`docker load -i dpc-outreach-monitoring-<sha>.tar` and run the image. The APK is
-a separate artifact and is not included in the Docker image.
+The image contains the backend, dashboard, and PostgreSQL; the Android APK is
+a separate artifact and is not included. For help with the source or image,
+contact the project team through the
+[GitHub repository issues](https://github.com/LemonZer0/dpc-outreach-monitoring-system/issues).
+
+## Dashboard and administration
+
+### API and command-line clients
 
 To use the interactive API client while the backend is running, open a
 second PowerShell window in `backend/` and run:
@@ -266,7 +366,7 @@ matched by phone number and are not restricted to listed contacts.
 The read-only `GET /api/dpcs` endpoint lists DPC IDs and names for
 dashboard selection; it does not expose account information.
 
-## Dashboard
+### Dashboard
 
 Start the backend with `backend/scripts/start-backend.ps1`. The backend serves
 the dashboard and API from the same origin; open `http://localhost:8080/` after
@@ -342,7 +442,7 @@ cleared on logout; they are not saved in browser storage. The backend
 permits dashboard requests only from the documented local origins; use
 HTTPS for a remote backend.
 
-## Admin contact and company management
+### Admin contact and company management
 
 Start the backend with `ADMIN_USERNAME` and `ADMIN_PASSWORD` configured.
 Admin contact and company management is available in the dashboard or
@@ -370,47 +470,9 @@ must not be sent over an unencrypted connection.
 Simulation call history uses the admin-protected
 `GET /api/admin/simulation/call-records?dpcId={dpcId}` endpoint.
 
-## Main Components
+## Android client
 
-- Android Call Client
-- Spring Boot Backend
-- PostgreSQL Database
-- CORE Dashboard
-- Google Sheets Integration
-
-## Core Workflow
-
-1. DPC selects a company/contact.
-2. Android application launches the normal phone dialer.
-3. DPC makes the phone call.
-4. Android records the call in the call log.
-5. Android application obtains call metadata.
-6. Metadata is sent to the backend.
-7. Backend validates and matches the call.
-8. Verification result is stored in PostgreSQL.
-9. Dashboard displays updated outreach information.
-10. Google Sheet is synchronized automatically.
-
-## Scope
-
-The system verifies recorded outreach activity using call metadata such
-as phone number, timestamp, duration, and call direction.
-
-Calls matched to a known contact with a duration greater than 60 seconds
-are labeled `MATCHED_LONG_CALL`. This is a duration-based heuristic only;
-it does not verify that a discussion took place.
-
-The system does NOT:
-
-- record calls
-- transcribe calls
-- inspect conversation content
-- determine what was discussed
-- determine whether the conversation was useful
-
-## Technology
-
-## Android emulator demo
+### Android emulator demo
 
 Build the debug APK from PowerShell:
 
@@ -443,27 +505,10 @@ physical Android device to test the dialer and call-log flow. Manual
 metadata submission has been tested with BlueStacks; physical-device
 dialer and call-log behavior still needs testing.
 
-### Backend
-- Java
-- Spring Boot
-- Maven
-- Spring Web
-- Spring Data JPA
-- PostgreSQL
-
-### Android
-- Android
-- Kotlin
-
-### Dashboard
-- HTML, CSS, JavaScript
-
-### Integration
-- Google Sheets API
-- Google OAuth
-
-## Team
+## Team and support
 
 G. Sunisith Sagar  
 CS23B021  
 Team ID: 21
+
+Project support: [GitHub repository issues](https://github.com/LemonZer0/dpc-outreach-monitoring-system/issues)

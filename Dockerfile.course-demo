@@ -1,0 +1,27 @@
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+
+WORKDIR /workspace
+COPY backend/pom.xml backend/pom.xml
+COPY backend/.mvn backend/.mvn
+COPY backend/mvnw backend/mvnw
+RUN chmod +x backend/mvnw
+COPY backend/src backend/src
+COPY dashboard dashboard
+WORKDIR /workspace/backend
+RUN ./mvnw -B package -DskipTests
+
+FROM postgres:17-alpine
+
+RUN apk add --no-cache openjdk21-jre-headless
+WORKDIR /app
+COPY --from=build /workspace/backend/target/backend-0.0.1-SNAPSHOT.jar app.jar
+COPY docker-entrypoint.sh /usr/local/bin/dpc-entrypoint.sh
+RUN chmod +x /usr/local/bin/dpc-entrypoint.sh
+
+ENV PORT=8080 \
+    ADMIN_USERNAME=dpc-admin
+EXPOSE 8080
+VOLUME ["/var/lib/postgresql/data"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=6 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/api/health || exit 1
+ENTRYPOINT ["/usr/local/bin/dpc-entrypoint.sh"]

@@ -6,6 +6,7 @@
 **/target
 android
 secrets
+*.tar
 **/*.jks
 **/*.keystore
 **/application-local.properties

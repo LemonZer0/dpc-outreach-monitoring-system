@@ -169,6 +169,39 @@ reuse development admin passwords for a public deployment.
 The Android client allows up to 90 seconds for a response so its first request
 can wait for a sleeping free web service to start.
 
+## Docker image for course staff
+
+The course-demo image contains the backend, dashboard, and local PostgreSQL in
+one container. It needs no hosted database, Compose file, or Google Sheets
+credentials. PostgreSQL listens only inside the container. The image generates
+a fresh admin password at startup and prints it in the container logs; no
+personal admin credentials are built into the image. Database files are stored
+in the container's `/var/lib/postgresql/data`; mount a Docker volume there to
+keep data when replacing the container.
+
+Build and run the image from the exact submission commit:
+
+```powershell
+$sha = (git rev-parse HEAD).Trim()
+$image = "dpc-outreach-monitoring:$sha"
+docker build --pull -f Dockerfile.course-demo -t $image .
+docker save -o ".\dpc-outreach-monitoring-$sha.tar" $image
+docker run -d --name dpc-outreach-demo -p 127.0.0.1:8080:8080 -v dpc-outreach-data:/var/lib/postgresql/data $image
+```
+
+Open `http://127.0.0.1:8080/`. Retrieve the generated admin credentials with
+`docker logs dpc-outreach-demo`. Stop the demo with
+`docker stop dpc-outreach-demo`; remove its container with
+`docker rm dpc-outreach-demo`. The named database volume remains available for
+the next run. The image also runs without a volume, in which case its database
+is removed with the container. The Android APK is a separate artifact.
+
+Upload the saved archive to the team's Google Drive and grant the course staff
+Google group view access. In the report, include the archive link and the
+SHA-tagged image name. After downloading the archive, staff can load it with
+`docker load -i dpc-outreach-monitoring-<sha>.tar` and run the image. The APK is
+a separate artifact and is not included in the Docker image.
+
 To use the interactive API client while the backend is running, open a
 second PowerShell window in `backend/` and run:
 

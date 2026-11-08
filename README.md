@@ -44,6 +44,50 @@ Google Sheets Integration
 
 *Note: This represents the planned system architecture.*
 
+## Repository structure
+
+The main source files and their roles are:
+
+```text
+.
+├── android/                         Kotlin Android client and Gradle build
+│   └── app/src/main/
+│       ├── java/.../MainActivity.kt  App screens, API calls, and call metadata flow
+│       ├── res/                      App strings, styles, and network configuration
+│       └── AndroidManifest.xml       App permissions and component declarations
+├── backend/                         Spring Boot API and PostgreSQL persistence
+│   ├── src/main/java/.../
+│   │   ├── controller/               HTTP endpoints
+│   │   ├── service/                  Matching, verification, admin, and Sheets logic
+│   │   ├── entity/                   Database entities and domain enums
+│   │   ├── repository/               Spring Data database access
+│   │   ├── dto/                      API request and response objects
+│   │   ├── config/                   Security and async configuration
+│   │   └── bootstrap/                Optional demo-data seeder
+│   ├── src/main/resources/
+│   │   ├── db/migration/             Flyway schema migrations
+│   │   └── application.properties    Backend defaults and integration settings
+│   ├── src/test/                     Unit, controller, and database integration tests
+│   ├── scripts/                      PowerShell backend and API helper scripts
+│   └── pom.xml                        Maven dependencies and build configuration
+├── dashboard/                       Browser dashboard HTML, CSS, and JavaScript
+├── docs/                            Project report background and supporting notes
+│   └── PROJECT_REPORT_CONTEXT.md    Verified project facts for report writing
+├── Dockerfile                       Render backend/dashboard image
+├── Dockerfile.course-demo           Course handoff image with local PostgreSQL
+├── docker-entrypoint.sh             Starts PostgreSQL and the app in that image
+├── render.yaml                      Render deployment blueprint
+├── .dockerignore                     Files excluded from Docker build contexts
+├── .gitignore                        Local files excluded from Git
+└── README.md                         Setup, deployment, API, and demo instructions
+```
+
+The course Docker image packages the backend and dashboard from `backend/` and
+`dashboard/`; it does not contain the Android app. Build it with
+`Dockerfile.course-demo`. The regular `Dockerfile` is used by the Render
+deployment. Android build output is written under
+`android/app/build/outputs/` and is ignored by Git.
+
 ## Backend demo data
 
 The backend can seed one local demo DPC, company, and contact when the

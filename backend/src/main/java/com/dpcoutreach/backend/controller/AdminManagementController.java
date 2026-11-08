@@ -55,6 +55,13 @@ public class AdminManagementController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @DeleteMapping("/dpcs/{dpcId}")
+    public ResponseEntity<Void> deleteDpc(@PathVariable Long dpcId) {
+        adminManagementService.deleteDpc(dpcId);
+        requestSheetsSync();
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/companies")
     public ResponseEntity<CompanyResponse> createCompany(@Valid @RequestBody CompanyWriteRequest request) {
         CompanyResponse response = adminManagementService.createCompany(request);

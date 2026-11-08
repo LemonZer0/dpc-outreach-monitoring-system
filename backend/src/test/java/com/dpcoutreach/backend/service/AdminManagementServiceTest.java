@@ -5,6 +5,7 @@ import com.dpcoutreach.backend.entity.CallSource;
 import com.dpcoutreach.backend.entity.Company;
 import com.dpcoutreach.backend.entity.Contact;
 import com.dpcoutreach.backend.entity.CoreOutreachStatus;
+import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.entity.OutreachStatus;
 import com.dpcoutreach.backend.entity.VerificationStatus;
 import com.dpcoutreach.backend.repository.CallRecordRepository;
@@ -30,6 +31,7 @@ class AdminManagementServiceTest {
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final ContactRepository contactRepository = mock(ContactRepository.class);
     private final DpcRepository dpcRepository = mock(DpcRepository.class);
+    private final DpcCreationService dpcCreationService = mock(DpcCreationService.class);
     private final CallRecordRepository callRecordRepository = mock(CallRecordRepository.class);
     private final OutreachStatusRepository outreachStatusRepository = mock(OutreachStatusRepository.class);
     private final CoreOutreachStatusRepository coreOutreachStatusRepository =
@@ -42,6 +44,7 @@ class AdminManagementServiceTest {
                 companyRepository,
                 contactRepository,
                 dpcRepository,
+                dpcCreationService,
                 callRecordRepository,
                 outreachStatusRepository,
                 coreOutreachStatusRepository);
@@ -58,6 +61,23 @@ class AdminManagementServiceTest {
         var order = inOrder(callRecordRepository, contactRepository);
         order.verify(callRecordRepository).clearContactReference(31L, VerificationStatus.UNMATCHED_NUMBER);
         order.verify(contactRepository).delete(contact);
+    }
+
+    @Test
+    void deletesDpcAndAllOfItsCallRecordsBeforeReleasingItsId() {
+        Dpc dpc = mock(Dpc.class);
+        CallRecord callRecord = mock(CallRecord.class);
+        when(dpcRepository.findById(7L)).thenReturn(Optional.of(dpc));
+        when(callRecord.getId()).thenReturn(42L);
+        when(callRecordRepository.findAllByDpcIdOrderByCallTimestampDesc(7L))
+                .thenReturn(List.of(callRecord));
+        when(callRecordRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(callRecord));
+
+        service.deleteDpc(7L);
+
+        var order = inOrder(callRecordRepository, dpcRepository);
+        order.verify(callRecordRepository).delete(callRecord);
+        order.verify(dpcRepository).delete(dpc);
     }
 
     @Test

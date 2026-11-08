@@ -30,6 +30,7 @@ public class AdminManagementService {
     private final CompanyRepository companyRepository;
     private final ContactRepository contactRepository;
     private final DpcRepository dpcRepository;
+    private final DpcCreationService dpcCreationService;
     private final CallRecordRepository callRecordRepository;
     private final OutreachStatusRepository outreachStatusRepository;
     private final CoreOutreachStatusRepository coreOutreachStatusRepository;
@@ -38,12 +39,14 @@ public class AdminManagementService {
             CompanyRepository companyRepository,
             ContactRepository contactRepository,
             DpcRepository dpcRepository,
+            DpcCreationService dpcCreationService,
             CallRecordRepository callRecordRepository,
             OutreachStatusRepository outreachStatusRepository,
             CoreOutreachStatusRepository coreOutreachStatusRepository) {
         this.companyRepository = companyRepository;
         this.contactRepository = contactRepository;
         this.dpcRepository = dpcRepository;
+        this.dpcCreationService = dpcCreationService;
         this.callRecordRepository = callRecordRepository;
         this.outreachStatusRepository = outreachStatusRepository;
         this.coreOutreachStatusRepository = coreOutreachStatusRepository;
@@ -58,8 +61,18 @@ public class AdminManagementService {
 
     @Transactional
     public DpcResponse createDpc(DpcWriteRequest request) {
-        Dpc dpc = dpcRepository.save(new Dpc(request.name().trim(), null));
+        Dpc dpc = dpcCreationService.create(request.name().trim(), null);
         return DpcResponse.from(dpc);
+    }
+
+    @Transactional
+    public void deleteDpc(Long dpcId) {
+        Dpc dpc = dpcRepository.findById(dpcId)
+                .orElseThrow(() -> new AdminResourceNotFoundException("DPC", dpcId));
+        callRecordRepository.findAllByDpcIdOrderByCallTimestampDesc(dpcId).stream()
+                .map(CallRecord::getId)
+                .forEach(this::deleteCallRecord);
+        dpcRepository.delete(dpc);
     }
 
     @Transactional

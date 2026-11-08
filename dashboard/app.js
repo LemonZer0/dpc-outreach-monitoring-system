@@ -224,6 +224,7 @@ deleteConfirmDialog.addEventListener("close", () => {
 adminCompaniesBody.addEventListener("click", handleCompanyAction);
 adminStatusesBody.addEventListener("change", updateCoreOutreachStatus);
 adminContactsBody.addEventListener("click", handleContactAction);
+adminDpcsBody.addEventListener("click", handleDpcAction);
 
 function setConnection(label, mode = "") {
   connectionLabel.textContent = label;
@@ -1225,11 +1226,13 @@ function renderAdminDashboard() {
 
   adminDpcsBody.replaceChildren();
   if (!state.adminDpcs.length) {
-    addEmptyRow(adminDpcsBody, "No DPCs yet. Create one above.", 2);
+    addEmptyRow(adminDpcsBody, "No DPCs yet. Create one above.", 3);
   }
   for (const dpc of state.adminDpcs) {
     const row = document.createElement("tr");
-    row.append(makeCell(`#${dpc.id}`), makeCell(dpc.name));
+    const actions = document.createElement("td");
+    actions.append(makeActionButton("Delete", "delete-dpc", dpc.id, "button-danger"));
+    row.append(makeCell(`#${dpc.id}`), makeCell(dpc.name), actions);
     adminDpcsBody.append(row);
   }
 
@@ -1408,6 +1411,20 @@ async function handleCompanyAction(event) {
   }
 }
 
+function handleDpcAction(event) {
+  const button = event.target.closest("button[data-action='delete-dpc']");
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  const dpc = state.adminDpcs.find((item) => item.id === id);
+  if (!dpc) return;
+  openDeleteConfirmation({
+    kind: "dpc",
+    id,
+    name: dpc.name,
+    description: `Delete ${dpc.name} (ID ${id}) and permanently delete all of its call history? The ID may be assigned to another DPC, so update any Android app still using it.`,
+  });
+}
+
 async function handleContactAction(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
@@ -1486,6 +1503,22 @@ async function confirmDelete(event) {
       } else {
         await loadDashboard();
       }
+      return;
+    }
+
+    if (deletion.kind === "dpc") {
+      await requestAdmin(`/api/admin/dpcs/${deletion.id}`, { method: "DELETE" }, password);
+      deleteConfirmDialog.close();
+      state.pendingDelete = null;
+      deleteConfirmUsername.value = "";
+      deleteConfirmPassword.value = "";
+      const refreshed = await loadAdminData();
+      showAdminMessage(
+        refreshed
+          ? `DPC and call history deleted. ID ${deletion.id} is available again; new DPCs use the lowest available ID.`
+          : "DPC deleted, but the dashboard could not refresh its data.",
+        !refreshed,
+      );
       return;
     }
 

@@ -6,6 +6,7 @@ import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.repository.CompanyRepository;
 import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
+import com.dpcoutreach.backend.service.DpcCreationService;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -21,6 +22,7 @@ class DemoDataSeederTest {
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final ContactRepository contactRepository = mock(ContactRepository.class);
     private final DpcRepository dpcRepository = mock(DpcRepository.class);
+    private final DpcCreationService dpcCreationService = mock(DpcCreationService.class);
 
     @Test
     void createsDemoDataWhenItDoesNotAlreadyExist() {
@@ -28,13 +30,15 @@ class DemoDataSeederTest {
         when(companyRepository.findFirstByName("Demo Company")).thenReturn(Optional.empty());
         when(contactRepository.findFirstByPhoneNumberAndCompanyId("919876543210", null))
                 .thenReturn(Optional.empty());
-        when(dpcRepository.save(any(Dpc.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dpcCreationService.create("Demo DPC", "local-demo"))
+                .thenReturn(new Dpc(1L, "Demo DPC", "local-demo"));
         when(companyRepository.save(any(Company.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(contactRepository.save(any(Contact.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        new DemoDataSeeder(companyRepository, contactRepository, dpcRepository, "+91 (98765) 43210").run();
+        new DemoDataSeeder(companyRepository, contactRepository, dpcRepository, dpcCreationService,
+                "+91 (98765) 43210").run();
 
-        verify(dpcRepository).save(any(Dpc.class));
+        verify(dpcCreationService).create("Demo DPC", "local-demo");
         verify(companyRepository).save(any(Company.class));
         verify(contactRepository).save(any(Contact.class));
     }
@@ -49,7 +53,8 @@ class DemoDataSeederTest {
         when(contactRepository.findFirstByPhoneNumberAndCompanyId("919876543210", null))
                 .thenReturn(Optional.of(contact));
 
-        new DemoDataSeeder(companyRepository, contactRepository, dpcRepository, "919876543210").run();
+        new DemoDataSeeder(companyRepository, contactRepository, dpcRepository, dpcCreationService,
+                "919876543210").run();
 
         verify(dpcRepository, never()).save(any(Dpc.class));
         verify(companyRepository, never()).save(any(Company.class));

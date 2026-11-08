@@ -6,6 +6,7 @@ import com.dpcoutreach.backend.entity.Dpc;
 import com.dpcoutreach.backend.repository.CompanyRepository;
 import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
+import com.dpcoutreach.backend.service.DpcCreationService;
 import com.dpcoutreach.backend.service.PhoneNumberNormalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,16 +28,19 @@ public class DemoDataSeeder implements CommandLineRunner {
     private final CompanyRepository companyRepository;
     private final ContactRepository contactRepository;
     private final DpcRepository dpcRepository;
+    private final DpcCreationService dpcCreationService;
     private final String configuredContactPhone;
 
     public DemoDataSeeder(
             CompanyRepository companyRepository,
             ContactRepository contactRepository,
             DpcRepository dpcRepository,
+            DpcCreationService dpcCreationService,
             @Value("${DEMO_CONTACT_PHONE}") String configuredContactPhone) {
         this.companyRepository = companyRepository;
         this.contactRepository = contactRepository;
         this.dpcRepository = dpcRepository;
+        this.dpcCreationService = dpcCreationService;
         this.configuredContactPhone = configuredContactPhone;
     }
 
@@ -44,7 +48,7 @@ public class DemoDataSeeder implements CommandLineRunner {
     public void run(String... args) {
         String phoneNumber = PhoneNumberNormalizer.normalize(configuredContactPhone);
         Dpc dpc = dpcRepository.findFirstByName(DEMO_DPC_NAME)
-                .orElseGet(() -> dpcRepository.save(new Dpc(DEMO_DPC_NAME, DEMO_DPC_ACCOUNT)));
+                .orElseGet(() -> dpcCreationService.create(DEMO_DPC_NAME, DEMO_DPC_ACCOUNT));
         Company company = companyRepository.findFirstByName(DEMO_COMPANY_NAME)
                 .orElseGet(() -> companyRepository.save(new Company(DEMO_COMPANY_NAME)));
         Contact contact = contactRepository.findFirstByPhoneNumberAndCompanyId(phoneNumber, company.getId())

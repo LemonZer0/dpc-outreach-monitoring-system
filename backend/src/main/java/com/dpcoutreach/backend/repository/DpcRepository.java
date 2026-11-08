@@ -19,4 +19,7 @@ public interface DpcRepository extends JpaRepository<Dpc, Long> {
     Optional<Dpc> findFirstByName(String name);
 
     List<Dpc> findAllByOrderByNameAsc();
+
+    @Query("select dpc.id from Dpc dpc order by dpc.id")
+    List<Long> findAllIdsByOrderByIdAsc();
 }

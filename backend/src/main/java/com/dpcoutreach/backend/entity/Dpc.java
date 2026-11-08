@@ -2,8 +2,6 @@
 package com.dpcoutreach.backend.entity;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -12,7 +10,6 @@ import jakarta.persistence.Table;
 public class Dpc {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String name;
@@ -25,6 +22,12 @@ public class Dpc {
     }
 
     public Dpc(String name, String accountInformation) {
+        this.name = name;
+        this.accountInformation = accountInformation;
+    }
+
+    public Dpc(Long id, String name, String accountInformation) {
+        this.id = id;
         this.name = name;
         this.accountInformation = accountInformation;
     }

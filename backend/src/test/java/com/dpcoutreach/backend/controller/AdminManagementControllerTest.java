@@ -110,4 +110,13 @@ class AdminManagementControllerTest {
 
         verify(adminManagementService).deleteCallRecord(42L);
     }
+
+    @Test
+    void deletesDpcAndRequestsSheetsSync() throws Exception {
+        mockMvc.perform(delete("/api/admin/dpcs/27"))
+                .andExpect(status().isNoContent());
+
+        verify(adminManagementService).deleteDpc(27L);
+        verify(eventPublisher).publishEvent(any(GoogleSheetsSyncRequestedEvent.class));
+    }
 }

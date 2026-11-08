@@ -243,13 +243,17 @@ self-reported outcome: an answered voicemail with a long duration can still be
 that from a conversation with a person.
 
 The admin dashboard lets CORE create, rename, and delete companies; create,
-edit, and delete contacts; create DPC entries; and set each company's
+edit, and delete contacts; create and delete DPC entries; and set each company's
 manual decision to `Confirmed`, `Pending`, `Declined`, or `Not set`.
 Contact numbers are normalized by the backend. Deleting a contact or company
 requires re-entering the current admin password. Call records are retained and
 become unmatched when their contact is deleted; deleting a company also removes
 its contacts and outreach statuses. Call verification remains automatic and
 separate from the manual decision.
+Deleting a DPC requires admin password confirmation and permanently removes
+all call records belonging to that DPC. New DPCs are assigned the lowest
+available positive ID. A deleted ID may therefore be assigned to a different
+DPC; update any Android app still configured with the deleted DPC's ID.
 Any call record in the normal or simulated call log can be permanently deleted
 after confirming with admin credentials. If deleting the latest app call for
 a company, the dashboard recalculates that company's call-verification summary
@@ -273,16 +277,17 @@ PowerShell window in `backend/` and run:
 ```
 
 The admin client prompts for the configured username and password and
-provides the same contact and company operations.
+provides contact, company, and DPC deletion operations. DPC deletion removes
+all call history for that DPC; the freed ID can be reused.
 
 Admin write and company-management routes require HTTP Basic credentials.
-These include `POST /api/admin/dpcs`; the `POST`, `PUT`, and `DELETE`
-company and contact routes; and
-`PUT /api/admin/companies/{companyId}/outreach-status`. Contact listing,
-DPC listing, call-record, and outreach-status read APIs remain available
-without admin credentials. Admin tools permit HTTP only for a loopback
-backend; use HTTPS for a remote backend because Basic credentials must not
-be sent over an unencrypted connection.
+These include `POST /api/admin/dpcs`,
+`DELETE /api/admin/dpcs/{dpcId}`, the `POST`, `PUT`, and `DELETE` company and
+contact routes, and `PUT /api/admin/companies/{companyId}/outreach-status`.
+Contact listing, DPC listing, call-record, and outreach-status read APIs
+remain available without admin credentials. Admin tools permit HTTP only for
+a loopback backend; use HTTPS for a remote backend because Basic credentials
+must not be sent over an unencrypted connection.
 
 `GET /api/call-records?dpcId={dpcId}` lists app-submitted calls only.
 Simulation call history uses the admin-protected

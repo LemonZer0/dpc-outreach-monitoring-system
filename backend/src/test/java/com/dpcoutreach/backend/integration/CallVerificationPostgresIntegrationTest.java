@@ -16,6 +16,8 @@ import com.dpcoutreach.backend.repository.ContactRepository;
 import com.dpcoutreach.backend.repository.DpcRepository;
 import com.dpcoutreach.backend.repository.OutreachStatusRepository;
 import com.dpcoutreach.backend.service.CallVerificationService;
+import com.dpcoutreach.backend.service.DpcCreationService;
+import com.dpcoutreach.backend.service.AdminManagementService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,6 +68,12 @@ class CallVerificationPostgresIntegrationTest {
     private CallVerificationService callVerificationService;
 
     @Autowired
+    private DpcCreationService dpcCreationService;
+
+    @Autowired
+    private AdminManagementService adminManagementService;
+
+    @Autowired
     private MockMvc mockMvc;
 
     @Autowired
@@ -104,7 +112,7 @@ class CallVerificationPostgresIntegrationTest {
                 + nationalNumber.substring(5);
 
         company = companyRepository.save(new Company("Concurrent test company " + uniqueSuffix));
-        dpc = dpcRepository.save(new Dpc("Concurrent test DPC " + uniqueSuffix, "integration-test"));
+        dpc = dpcCreationService.create("Concurrent test DPC " + uniqueSuffix, "integration-test");
         contact = contactRepository.save(new Contact("Concurrent test contact", formattedPhone, company));
         request = new CallSubmissionRequest(
                 dpc.getId(), formattedPhone, Instant.now().minusSeconds(2), 35);
@@ -550,6 +558,31 @@ class CallVerificationPostgresIntegrationTest {
         assertTrue(callRecordRepository.findById(latestCall.getId()).isEmpty());
         OutreachStatus status = outreachStatusRepository.findByCompanyId(company.getId()).orElseThrow();
         assertEquals(earlierCall.getId(), status.getLatestCallRecord().getId());
+    }
+
+    @Test
+    void deletingDpcRemovesItsCallHistoryAndNewDpcUsesLowestAvailableId() {
+        callVerificationService.verifyAndSave(request);
+        Long deletedId = dpc.getId();
+
+        adminManagementService.deleteDpc(deletedId);
+        dpc = null;
+
+        assertTrue(callRecordRepository.findAllByDpcIdOrderByCallTimestampDesc(deletedId).isEmpty());
+        assertTrue(dpcRepository.findById(deletedId).isEmpty());
+
+        long expectedId = 1;
+        for (Long existingId : dpcRepository.findAllIdsByOrderByIdAsc()) {
+            if (existingId > expectedId) {
+                break;
+            }
+            if (existingId == expectedId) {
+                expectedId++;
+            }
+        }
+        createdAdminDpc = dpcCreationService.create("Replacement DPC", null);
+
+        assertEquals(expectedId, createdAdminDpc.getId());
     }
 
     @Test

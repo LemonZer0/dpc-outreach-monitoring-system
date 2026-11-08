@@ -108,6 +108,15 @@ function Show-Companies {
     $companies | Format-Table id, name -AutoSize | Out-Host
 }
 
+function Show-Dpcs {
+    $dpcs = @(Invoke-ApiRequest -Method Get -Path "/api/dpcs")
+    if ($dpcs.Count -eq 0) {
+        Write-Host "No DPCs are available."
+        return
+    }
+    $dpcs | Format-Table id, name -AutoSize | Out-Host
+}
+
 function Read-CompanyId {
     $companies = @(Invoke-ApiRequest -Method Get -Path "/api/admin/companies")
     if ($companies.Count -eq 0) {
@@ -152,7 +161,9 @@ do {
     Write-Host "6. Create company"
     Write-Host "7. Rename company"
     Write-Host "8. Delete company"
-    Write-Host "9. Exit"
+    Write-Host "9. List DPCs"
+    Write-Host "10. Delete DPC and its call history"
+    Write-Host "11. Exit"
     $choice = Read-Host "Choose an option"
 
     try {
@@ -203,10 +214,20 @@ do {
                 Invoke-ConfirmedDelete -Path "/api/admin/companies/$companyId" -ResourceLabel "company $companyId"
             }
             "9" {
+                Show-Dpcs
+            }
+            "10" {
+                Show-Dpcs
+                $dpcId = Read-PositiveId "DPC ID"
+                Write-Host "The ID may be reused; update any Android app still configured with it."
+                Invoke-ConfirmedDelete -Path "/api/admin/dpcs/$dpcId" `
+                    -ResourceLabel "DPC $dpcId and all of its call history"
+            }
+            "11" {
                 Write-Host "Goodbye."
             }
             default {
-                Write-Host "Choose an option from 1 to 9." -ForegroundColor Yellow
+                Write-Host "Choose an option from 1 to 11." -ForegroundColor Yellow
             }
         }
     } catch {
@@ -215,4 +236,4 @@ do {
             Write-Host $_.ErrorDetails.Message
         }
     }
-} while ($choice -ne "9")
+} while ($choice -ne "11")
